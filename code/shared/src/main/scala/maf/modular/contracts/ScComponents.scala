@@ -3,6 +3,7 @@ package maf.modular.contracts
 import maf.core.{Address, Environment, Identity}
 import maf.language.contracts.{ScExp, ScLambda}
 import maf.modular.LocalStoreMap
+import maf.modular.contracts.semantics._
 
 sealed trait ScComponent extends Serializable
 

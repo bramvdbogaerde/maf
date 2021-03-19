@@ -1,4 +1,4 @@
-package maf.modular.contracts
+package maf.modular.contracts.semantics
 
 import maf.core.{Environment, Lattice}
 import maf.language.contracts.{ScExp, ScIdentifier, ScNil}

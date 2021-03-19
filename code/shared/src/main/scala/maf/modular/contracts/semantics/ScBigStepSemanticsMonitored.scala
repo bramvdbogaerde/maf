@@ -1,4 +1,4 @@
-package maf.modular.contracts
+package maf.modular.contracts.semantics
 import maf.core.Identity
 import maf.util.benchmarks.Timeout
 import maf.language.contracts._

@@ -1,9 +1,13 @@
-package maf.modular.contracts
+package maf.modular.contracts.analyses
 
 import maf.language.contracts.ScExp
 import maf.modular.ModAnalysis
 import maf.modular.worklist.FIFOWorklistAlgorithm
 import maf.util.benchmarks.Timeout
+
+import maf.modular.contracts.semantics._
+import maf.modular.contracts.domain._
+import maf.modular.contracts._
 
 abstract class SimpleScSemantics(prg: ScExp)
     extends ModAnalysis(prg)

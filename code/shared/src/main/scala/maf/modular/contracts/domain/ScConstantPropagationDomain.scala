@@ -1,7 +1,7 @@
-package maf.modular.contracts
+package maf.modular.contracts.domain
 
 import maf.core.Address
-import maf.language.contracts.{ScCoProductLattice, ScLattice}
+import maf.language.contracts.ScCoProductLattice
 
 trait ScConstantPropagationDomain extends ScDomain {
   import maf.lattice.ConstantPropagation._

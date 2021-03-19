@@ -1,7 +1,9 @@
-package maf.modular.contracts
+package maf.modular.contracts.analyses
 
 import maf.core.Identity
 import maf.language.contracts.{ScExp, ScProgram}
+
+import maf.modular.contracts.semantics._
 
 trait ScAnalysisWithPrelude extends ScModSemanticsScheme {
   import maf.language.contracts.ScPrelude._

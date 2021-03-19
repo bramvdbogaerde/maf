@@ -1,8 +1,11 @@
-package maf.modular.contracts
+package maf.modular.contracts.analyses
 
 import maf.core.Identity
 import maf.core.Position.Position
 import maf.language.contracts.{ScIdentifier, ScLattice}
+
+import maf.modular.contracts._
+import maf.modular.contracts.semantics._
 
 trait ScCallInsensitivity extends ScModSemanticsScheme {
   type AllocationContext = Component

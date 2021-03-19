@@ -1,4 +1,4 @@
-package maf.modular.contracts
+package maf.modular.contracts.domain
 
 import maf.language.contracts.ScSchemeDomain
 import maf.language.scheme.lattices.ModularSchemeLattice

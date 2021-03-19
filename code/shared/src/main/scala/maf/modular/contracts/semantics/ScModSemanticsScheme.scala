@@ -1,4 +1,4 @@
-package maf.modular.contracts
+package maf.modular.contracts.semantics
 
 import maf.core.Position.Position
 import maf.core.{Address, Environment, Identity}
@@ -14,7 +14,10 @@ import maf.language.scheme.SchemeLambdaExp
 import maf.language.CScheme.TID
 import maf.language.scheme.primitives.SchemePrimitive
 import maf.language.contracts.ScNil
-import maf.core.Identifier
+
+import maf.modular.contracts._
+import maf.modular.contracts.domain._
+import maf.modular.contracts.analyses._
 
 object ScModSemanticsScheme {
   var r = 0

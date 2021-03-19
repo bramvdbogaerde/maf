@@ -1,4 +1,4 @@
-package maf.modular.contracts
+package maf.modular.contracts.semantics
 
 import maf.core.Position.Position
 import maf.core.{Address, Environment, Identity}
@@ -7,12 +7,9 @@ import maf.language.contracts.{ScExp, ScIdentifier, ScLambda, ScLattice, ScParam
 import maf.modular.{DestructiveStore, GlobalStore, LocalStore, LocalStoreMap, ModAnalysis, ReturnAddr, ReturnValue}
 import maf.core.Lattice
 import maf.lattice.interfaces.BoolLattice
-import maf.language.scheme.primitives.SchemeInterpreterBridge
-import maf.language.scheme.SchemeExp
-import maf.language.scheme.SchemeLambdaExp
-import maf.language.CScheme.TID
-import maf.language.scheme.primitives.SchemePrimitive
-import maf.language.contracts.ScNil
+
+import maf.modular.contracts.domain.ScDomain
+import maf.modular.contracts._
 
 object ScModSemantics {
   var r = 0
