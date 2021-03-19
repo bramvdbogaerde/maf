@@ -28,12 +28,9 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
   type C
   type Sym
 
-  type P = SchemePrimitive[ProductLattice[ValueExt], A]
-  type Q = SchemePrimitive[Product2[L, modularLattice.Elements], A]
   type L = ProductLattice[ValueExt]
   type V = Product2[L, modularLattice.Elements]
   type Value = V
-  type Prim = SchemePrimitive[V, A]
 
   implicit val boolLattice: BoolLattice[B]
 
