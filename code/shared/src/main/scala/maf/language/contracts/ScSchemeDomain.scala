@@ -31,6 +31,7 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
   type L = ProductLattice[ValueExt]
   type V = Product2[L, modularLattice.Elements]
   type Value = V
+  type Prim = SchemePrimitive[V, A]
 
   implicit val boolLattice: BoolLattice[B]
 
@@ -43,7 +44,7 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
   /*
    * A map from names of primitives to the primitives themselves
    */
-  val primMap: Map[String, SchemePrimitive[V, A]] =
+  val primMap: Map[String, Prim] =
     schemePrimitives.allPrimitives ++ scPrimitives.allPrimitives.map(p => (p.name, p))
 
   val modularLattice: ModularSchemeLattice[A, S, B, I, R, C, Sym]

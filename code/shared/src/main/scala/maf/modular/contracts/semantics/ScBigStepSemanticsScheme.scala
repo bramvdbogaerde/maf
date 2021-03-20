@@ -5,6 +5,19 @@ import maf.language.contracts.{ScExp, _}
 import maf.util.benchmarks.Timeout
 import maf.language.scheme.lattices.Product2SchemeLattice.StoreWrapper
 import maf.language.sexp.Value
+import maf.modular.contracts._
+
+trait ScSemantics extends ScAbstractSemanticsMonadAnalysis {
+
+  /** Allocate a pair in the memory of the machine */
+  def allocCons(
+      car: PostValue,
+      cdr: PostValue,
+      carIdn: Identity,
+      cdrIdn: Identity
+    ): ScEvalM[PostValue]
+
+}
 
 import maf.modular.contracts.domain.ScSchemePrimitives
 trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimitives with ScSchemeSemanticsMonad {
@@ -13,6 +26,9 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
   private lazy val primFalse = primMap("false?")
   private lazy val primProc = primMap("procedure?")
   private lazy val primDep = primMap("dependent-contract?")
+  private lazy val primCar = primMap("car")
+  private lazy val primCdr = primMap("cdr")
+
   private var totalRuns = 0
 
   import ScEvalM._
@@ -129,8 +145,8 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
         evalDefineAnnotatedFn(name, parameters, contract, expression, idn)
       case ScProvideContracts(variables, contracts, _) => evalProvideContracts(variables, contracts)
       case ScCons(car, cdr, _)                         => evalCons(car, cdr)
-      case ScCar(pai, _)                               => evalCar(pai)
-      case ScCdr(pai, _)                               => evalCdr(pai)
+      case exp @ ScCar(pai, _)                         => evalCar(pai, exp)
+      case exp @ ScCdr(pai, _)                         => evalCdr(pai, exp)
       case ScNil(_)                                    => result(lattice.schemeLattice.nil)
     }
 
@@ -279,11 +295,29 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
       ): ScEvalM[PostValue] =
       ??? // TODO: use scheme primitives here
 
-    def evalCar(pai: ScExp): ScEvalM[PostValue] =
-      ??? // TODO: use scheme primitives here
+    def evalCar(pai: ScExp, carExp: ScExp): ScEvalM[PostValue] = for {
+      value <- eval(pai)
+      result <- withStoreCacheAdapter { store =>
+        primCar
+          .call(carExp, List((pai, value._1)), store, this)
+          .map { case (value, store) =>
+            (value, StoreWrapper.unwrap(store).asInstanceOf[StoreCacheAdapter])
+          }
+          .getOrElse((lattice.bottom, store))
+      }
+    } yield (result, ScNil()) // TODO: try to read postvalue from store cache in car primitive
 
-    def evalCdr(pai: ScExp): ScEvalM[PostValue] =
-      ??? // TODO: use scheme primitives here
+    def evalCdr(pai: ScExp, cdrExp: ScExp): ScEvalM[PostValue] = for {
+      value <- eval(pai)
+      result <- withStoreCacheAdapter { store =>
+        primCdr
+          .call(cdrExp, List((pai, value._1)), store, this)
+          .map { case (value, store) =>
+            (value, StoreWrapper.unwrap(store).asInstanceOf[StoreCacheAdapter])
+          }
+          .getOrElse((lattice.bottom, store))
+      }
+    } yield (result, ScNil()) // TODO: try to read postvalue from store cache in car primitive
 
     def evalProvideContracts(variables: List[ScIdentifier], contracts: List[ScExp]): ScEvalM[PostValue] =
       sequenceLast(variables.zip(contracts).map { case (variable, contract) =>
