@@ -596,22 +596,31 @@ trait ScSharedSemantics extends ScSemantics {
       c: => ScEvalM[X]
     ): ScEvalM[X] =
     withPc(feasible(op, value)).flatMap {
-      case Some(pc) => if (mustReplacePc) replacePc(pc)(c) else c
-      case None     => void
+      case Right(pc) => if (mustReplacePc) replacePc(pc)(c) else c
+      case Left(pc)  => if (mustReplacePc) replacePc(pc)(c) >> void else void
     }
 
   def guardFeasible(op: Prim, value: PostValue): ScEvalM[()] = ifFeasible(op, value)(pure(()))
 
-  private def feasible(op: Prim, value: PostValue)(pc: PC): Option[PC] =
-    value.pure match {
+  /**
+   * Checks whether applying the given primitive to the given value is returns possibly true or not.
+   *
+   * @param op the primitive to apply
+   * @param value the value to check using op
+   * @return an either value, being Left when the condition is not feasible, otherwise Right. In both cases the
+   * value contained within the Either value will be the path condition
+   */
+  private def feasible(op: Prim, value: PostValue)(pc: PC): Either[PC, PC] = {
+    val newPc = pc.and(ScFunctionAp(ScIdentifier(primName(op), Identity.none), List(value.symbolic), Identity.none))
+    value.symbolic match {
       case _ if !lattice.schemeLattice.isTrue(run(callPrimitive(PrimitiveOperator(op, ScNil()), Argument(value, ScNil())).map(_.pure))) =>
-        None
+        Left(newPc)
 
-      case ScNil(_) => Some(pc)
+      case ScNil(_) => Left(newPc)
       case _ =>
-        val newPc = pc.and(ScFunctionAp(ScIdentifier(primName(op), Identity.none), List(value.symbolic), Identity.none))
-        if (solve(newPc)) Some(newPc) else None
+        if (solve(newPc)) Right(newPc) else Left(newPc)
     }
+  }
 
   def refined(name: String, value: PostValue): PostValue = {
     val refinedValue = lattice
