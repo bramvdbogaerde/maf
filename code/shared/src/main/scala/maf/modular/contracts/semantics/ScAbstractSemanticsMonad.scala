@@ -16,7 +16,9 @@ trait Monad[M[_]] {
   /** Injects the unit in the Monad */
   def unit: M[()] = pure(())
 
-  def map[X, Y](m: M[X], f: X => Y): M[Y]
+  def map[X, Y](m: M[X], f: X => Y): M[Y] =
+    flatMap(m, (x: X) => pure(f(x)))
+
   def flatMap[X, Y](m: M[X], f: X => M[Y]): M[Y]
 
   def >>=[A, B](m: M[A], f: A => M[B]): M[B] =
