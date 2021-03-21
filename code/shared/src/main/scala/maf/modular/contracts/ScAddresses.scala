@@ -71,7 +71,7 @@ case class ScMonitoredPrimAddr[Context](name: String) extends ScAddresses[Contex
  * An ScCdrAddr can be used for allocating the cdr on locations where we do not have access to
  * the identity of the cdr
  */
-case class ScCdrAddr[Context](addr: ScGenericAddr[Context]) extends ScAddresses[Context] {
+case class ScCdrAddr[A <: Address, Context](addr: A) extends ScAddresses[Context] {
 
   /**
    * Should the address be included when printing an environment or store?

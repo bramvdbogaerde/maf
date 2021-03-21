@@ -1,6 +1,12 @@
 package maf.modular.contracts.semantics
 
 import maf.language.contracts.ScIdentifier
+import maf.core.Store
+import maf.core.Identity
+import maf.core.Address
+import maf.language.contracts.ScExp
+import maf.core.Environment
+import maf.core.BasicEnvironment
 
 trait Monad[M[_]] {
 
@@ -50,34 +56,39 @@ trait ScAbstractSemanticsMonadAnalysis {
   /*
    * The type of the path condition (e.g. ScExp)
    */
-  type PC
+  type PC = ScExp
 
   /** A value combined with some symbolic information */
-  type PostValue
+  type PostValue <: IsPostValue
 
   /** The type of a mapping between an addresses and a value */
-  type StoreCache
+  type StoreCache <: Store[Addr, PostValue]
 
   /** The t ype of a raw value without any symbolic information */
   type Val
 
   /** The type of an address */
-  type Addr
+  type Addr <: Address
+
+  /** The type of primitive values */
+  type Prim
 
   /**
    * The type of an environment, which should be a mapping between
    *  an identifier (e.g. string) and an address
    */
-  type Env
+  type Env = BasicEnvironment[Addr]
 
-  /**
-   * The type of an identity, which is used to uniquely identify source locations
-   * and the values produced on these locations
-   */
-  type Identity
+  /** A concrete store */
+  type ConcreteStore
 
   /** An instance of the monad typeclass */
   def abstractMonadInstance: ScAbstractSemanticsMonad[M]
+
+  trait IsPostValue {
+    def pure: Val
+    def symbolic: ScExp
+  }
 
   case class ScEvalM[X](m: M[X]) {
     def map[Y](f: X => Y): ScEvalM[Y] =
@@ -156,6 +167,9 @@ trait ScAbstractSemanticsMonadAnalysis {
   /** Adds symbolic information to the given raw value */
   def value(v: Val): PostValue
 
+  /** Adds the given symbolic information to the given raw value */
+  def value(v: Val, s: ScExp): PostValue
+
   /**
    * Applies f with the list of ignored identities,
    * ignored identities refer to values of which the validity of the
@@ -165,16 +179,34 @@ trait ScAbstractSemanticsMonadAnalysis {
 
   /** Adds an ignored identity to the context */
   def addIgnored(idns: Iterable[Identity]): ScEvalM[()]
+
   /*
    * Applies  the given function with the current environment
    */
   def withEnv[B](f: Env => ScEvalM[B]): ScEvalM[B]
 
+  /** Applies the modification function to the current environment */
+  def modifyEnv(f: Env => Env): ScEvalM[()]
+
+  def replaceEnv[B](replacement: Env): ScEvalM[()] =
+    modifyEnv(_ => replacement)
+
+  /**
+   * Runs the given computation in the environment modified by f,
+   *  and restores it afterwards
+   */
+  def local[B](f: Env => Env, c: ScEvalM[B]): ScEvalM[B] =
+    local(modifyEnv(f), c)
+
+  def local[A, B](updateEnv: ScEvalM[A], c: ScEvalM[B]): ScEvalM[B] = withEnv { oldEnv =>
+    updateEnv >> c >>= (value => replaceEnv(oldEnv) >> pure(value))
+  }
+
   /**
    * Returns a computation that looks up the given identifier in the current"
    * environment and returns its associated address
    */
-  def lookup(identifier: String): ScEvalM[Addr]
+  def lookup(identifier: String): ScEvalM[Addr] = withEnv(env => pure(env.lookup(identifier).get))
 
   // TODO: this is actually something that belongs elsewhere, maybe in the main analysis,
   // we don't want to know about allocations and components here
@@ -215,6 +247,15 @@ trait ScAbstractSemanticsMonadAnalysis {
    */
   def withStoreCache[X](f: StoreCache => ScEvalM[X]): ScEvalM[X]
 
+  /**
+   * Returns a computation that applies the given function on the current store cache
+   * and expects a tuple of a value and a new store cache
+   */
+  def withStoreCache[X](f: StoreCache => (X, StoreCache)): ScEvalM[X]
+
+  def withStoreCache[X](f: StoreCache => StoreCache): ScEvalM[()] =
+    withStoreCache(cache => ((), f(cache)))
+
   // TODO: we don't want to expose the entire context, check the big step semantics
   // to ensure that we only use the auxilary functions
   // def withContext[X](f: Context => ScEvalM[X]): ScEvalM[X]
@@ -230,7 +271,9 @@ trait ScAbstractSemanticsMonadAnalysis {
   def joinInCache(addr: Addr, value: PostValue): ScEvalM[()]
 
   /** Adds a binding to the environment */
-  def addBindingToEnv(ident: ScIdentifier, addr: Addr)
+  def addBindingToEnv(ident: ScIdentifier, addr: Addr): ScEvalM[()] = {
+    modifyEnv(env => env.extend(ident.name, addr))
+  }
 
   /**
    * Given a computation that yields states that contain sets of values, this operator yields a single computation
@@ -246,6 +289,24 @@ trait ScAbstractSemanticsMonadAnalysis {
 
   /** Removes the given addresses from the store */
   def evict(addresses: List[Addr]): ScEvalM[()]
+
+  /** Reads from the given address in the store */
+  def read(addr: Addr): ScEvalM[PostValue]
+
+  /**
+   * Writes the given value to the given address
+   *
+   * @param addr the address to write the value to
+   * @param value the value to write to the given address
+   * @return a computation that writes the given value to the address
+   */
+  def write(addr: Addr, value: PostValue): ScEvalM[()]
+
+  /** Forcefully write to the store */
+  def writeForce(addr: Addr, value: PostValue): ScEvalM[()]
+
+  /** Run the given computation without any initial context */
+  def run[A](c: ScEvalM[A]): A
 
   // TODO: again this refers to components and allocations, this should reside elsewhere
   //def extended[X](ident: ScIdentifier, component: Component)(c: Addr => ScEvalM[X]): ScEvalM[X] =

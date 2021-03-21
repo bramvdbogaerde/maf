@@ -112,6 +112,8 @@ case class ScDependentContract(
 
 trait ScParam extends ScExp {
   def name: String
+  def toScIdentifier: ScIdentifier =
+    ScIdentifier(this.name, this.idn)
 }
 
 case class ScIdentifier(name: String, idn: Identity) extends ScExp with ScParam {
