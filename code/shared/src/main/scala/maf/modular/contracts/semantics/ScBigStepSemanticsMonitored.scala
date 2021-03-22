@@ -42,6 +42,7 @@ trait ScBigStepSemanticsMonitored extends ScBigStepSemanticsScheme {
       super.analyze(_ignored_timeout)
     }
 
+    /*
     override def eval(expr: ScExp): ScEvalM.ScEvalM[PostValue] = expr match {
       case ScFunctionAp(ScIdentifier("safe", _), List(), _, _) =>
         allSafe = true
@@ -86,6 +87,8 @@ trait ScBigStepSemanticsMonitored extends ScBigStepSemanticsScheme {
         }
       ) >> super.blame(blamedIdentity, blamingIdentity)
     }
+
+     */
   }
 
 }

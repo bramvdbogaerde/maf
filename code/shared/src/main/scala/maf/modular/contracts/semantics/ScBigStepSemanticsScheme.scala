@@ -160,7 +160,7 @@ trait ScSharedSemantics extends ScSemantics {
     } >> void
 
   /** Creates a fresh identifier for the given opaque value */
-  def fresh(v: Val): PostValue = if (lattice.isDefinitelyOpq(v)) super.value(v, ScModSemantics.freshIdent) else super.value(v, ScNil())
+  def fresh(v: Val): PostValue = if (lattice.isDefinitelyOpq(v)) value(v, ScModSemantics.freshIdent) else value(v, ScNil())
 
   def writeLocalForce(addr: Addr, value: PostValue): ScEvalM[()] =
     addToCache(addr -> value)
@@ -235,21 +235,21 @@ trait ScSharedSemantics extends ScSemantics {
       // The reason for this is that the value can be overwritten by a provide/contract,
       // in that case we would like to keep the contract if it points to the lambda,
       // otherwise we use a join.
-      value <- read(addr)
+      v <- read(addr)
       _ <-
-        if (lattice.isDefinitelyArrow(value.pure) && lattice.getArr(value.pure).size == 1) {
+        if (lattice.isDefinitelyArrow(v.pure) && lattice.getArr(v.pure).size == 1) {
           // the address we try to write to contains a contract
-          read(lattice.getArr(value.pure).head.e).flatMap { (wrappedValue) =>
+          read(lattice.getArr(v.pure).head.e).flatMap { (wrappedValue) =>
             if (wrappedValue.pure == lambda.pure)
               // the contract wraps us, we don't overwrite (or join)
               unit
             else
               // the contract does not point to us, use a normal join
-              write(addr, super.value(lambda.pure, name))
+              write(addr, value(lambda.pure, name))
           }
         } else
           // the value on the adress is not a contract, use a normal join
-          write(addr, super.value(lambda.pure, name))
+          write(addr, value(lambda.pure, name))
 
     } yield lambda
 
@@ -265,7 +265,7 @@ trait ScSharedSemantics extends ScSemantics {
       lambda <- eval(ScLambda(parameters, body, idn))
       evaluatedContract <- eval(contract)
       monitoredFunction <- applyMon(evaluatedContract, lambda, contract.idn, idn)
-      _ <- write(addr, super.value(monitoredFunction.pure, name))
+      _ <- write(addr, value(monitoredFunction.pure, name))
     } yield monitoredFunction
 
   def evalProgram(expressions: List[ScExp]): ScEvalM[PostValue] = {
@@ -315,7 +315,7 @@ trait ScSharedSemantics extends ScSemantics {
       })
       evaluatedRangeMaker <- eval(rangeMaker)
       _ <- write(rangeAddr, evaluatedRangeMaker)
-    } yield super.value(lattice.grd(Grd(evaluatedDomains, rangeAddr)), ScNil())
+    } yield value(lattice.grd(Grd(evaluatedDomains, rangeAddr)), ScNil())
   }
 
   def evalMon(
@@ -368,16 +368,16 @@ trait ScSharedSemantics extends ScSemantics {
     } yield evaluatedBody
 
   def evalOpaque(refinements: Set[String]): ScEvalM[PostValue] =
-    pure(super.value(lattice.opq(Opq(refinements)), ScIdentifier(ScModSemantics.genSym, Identity.none)))
+    pure(value(lattice.opq(Opq(refinements)), ScIdentifier(ScModSemantics.genSym, Identity.none)))
 
-  def evalValue(value: ScValue): ScEvalM[PostValue] = value.value match {
-    case Value.Integer(i)   => pure(super.value(lattice.schemeLattice.number(i), value))
-    case Value.Boolean(b)   => pure(super.value(lattice.schemeLattice.bool(b), value))
-    case Value.Symbol(s)    => pure(super.value(lattice.schemeLattice.symbol(s), ScNil()))
-    case Value.Real(r)      => pure(super.value(lattice.schemeLattice.real(r), value))
-    case Value.Character(c) => pure(super.value(lattice.schemeLattice.char(c), value))
+  def evalValue(v: ScValue): ScEvalM[PostValue] = v.value match {
+    case Value.Integer(i)   => pure(value(lattice.schemeLattice.number(i), v))
+    case Value.Boolean(b)   => pure(value(lattice.schemeLattice.bool(b), v))
+    case Value.Symbol(s)    => pure(value(lattice.schemeLattice.symbol(s), ScNil()))
+    case Value.Real(r)      => pure(value(lattice.schemeLattice.real(r), v))
+    case Value.Character(c) => pure(value(lattice.schemeLattice.char(c), v))
     case Value.Nil          => result(lattice.schemeLattice.nil)
-    case Value.String(s)    => pure(super.value(lattice.schemeLattice.string(s), ScNil()))
+    case Value.String(s)    => pure(value(lattice.schemeLattice.string(s), ScNil()))
   }
 
   def evalIdentifier(identifier: ScIdentifier): ScEvalM[PostValue] =
@@ -473,10 +473,8 @@ trait ScSharedSemantics extends ScSemantics {
 
     // 5. Application of an OPQ value, this yields simply an OPQ value
     val opqAp = lattice.getOpq(operator.pure).map { _ =>
-      for {
-        // TODO: simulate the repeated application of passed lambdas (HAVOC semantics)
-        value <- pure(super.value(lattice.opq(Opq()), ScModSemantics.freshIdent))
-      } yield value
+      // TODO: simulate the repeated application of passed lambdas (HAVOC semantics)
+      pure(value(lattice.opq(Opq()), ScModSemantics.freshIdent))
     }
 
     // 6. Application of thunk
@@ -622,14 +620,14 @@ trait ScSharedSemantics extends ScSemantics {
     }
   }
 
-  def refined(name: String, value: PostValue): PostValue = {
+  def refined(name: String, v: PostValue): PostValue = {
     val refinedValue = lattice
-      .getOpq(value.pure)
+      .getOpq(v.pure)
       .map(opq => opq.copy(refinementSet = opq.refinementSet + name))
       .map(lattice.opq)
       .foldLeft(lattice.bottom)((acc, v) => lattice.join(acc, v))
 
-    super.value(refinedValue, value.symbolic)
+    value(refinedValue, v.symbolic)
   }
 
   def enrich(operator: PostValue, value: PostValue): PostValue = operator.symbolic match {

@@ -1,7 +1,9 @@
-package maf.web.visualitions.softcontract
+package maf.web.visualisations.softcontract
 
 import maf.language.contracts._
-import maf.modular.contracts.{ScCallInsensitivity, ScSchemeConstantPropagationDomain, ScSmtSolver, SimpleScSemantics}
+import maf.modular.contracts.analyses._
+import maf.modular.contracts.domain._
+import maf.modular.contracts._
 
 abstract class ScTestAnalysis(prg: ScExp) extends SimpleScSemantics(prg) with ScCallInsensitivity with ScSchemeConstantPropagationDomain {}
 

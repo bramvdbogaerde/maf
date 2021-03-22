@@ -1,16 +1,12 @@
 package maf.cli.runnables
 
-import maf.modular.contracts.ScGlobalStoreAnalysis
-import maf.modular.contracts.ScJVMAnalysis
-import maf.modular.contracts.SimpleScSemantics
+import maf.modular.contracts._
+import maf.modular.contracts.analyses._
+import maf.modular.contracts.domain._
 import scala.io.StdIn.readLine
 import maf.language.contracts.SCExpCompiler
-import maf.modular.contracts.ScCallInsensitivity
-import maf.modular.contracts.ScConstantPropagationDomain
 import maf.modular.contracts.ScMain
-import maf.language.contracts.ScPrelude
-import maf.modular.contracts.ScAnalysisWithPrelude
-import maf.modular.contracts.ScSchemeConstantPropagationDomain
+
 
 /** A tiny REPL for testing soft contract verification on smaller programs */
 object SoftContractConsole extends App {

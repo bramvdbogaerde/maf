@@ -4,6 +4,8 @@ import maf.core.{Environment, Identity}
 import maf.language.contracts.{ScExp, ScLattice}
 import maf.language.contracts.ScLattice.{Arr, Grd, Prim, Thunk}
 import maf.modular.GlobalStore
+import maf.modular.contracts._
+import maf.modular.contracts.semantics._
 
 trait ScPrimitives extends ScModSemantics with GlobalStore[ScExp] {
   trait Implies {

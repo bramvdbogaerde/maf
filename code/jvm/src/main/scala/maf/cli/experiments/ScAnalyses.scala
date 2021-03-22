@@ -2,6 +2,8 @@ package maf.cli.experiments
 
 import maf.language.contracts.ScExp
 import maf.modular.contracts._
+import maf.modular.contracts.analyses._
+import maf.modular.contracts.domain._
 
 object ScAnalyses {
   abstract class ScBaseAnalysis(prg: ScExp) extends SimpleScSemantics(prg) with ScJVMAnalysis

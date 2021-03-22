@@ -37,6 +37,7 @@ case class TreeNode(
 case object NilNode extends ConcTree {
   def unsat(branch: Boolean): Unit = throw new Exception("Cannot mark nil node as unsatisfiable")
   def take(branch: Boolean, pc: ScExp): ConcTree = throw new Exception(s"Cannot take branch on ${this.getClass}")
+  val pc: ScExp = ScNil()
 }
 
 /** A node that was discovered during execution but whose subtree is not yet explored by the analysis */
@@ -60,13 +61,15 @@ case class ErrorNode(error: String, pc: ScExp) extends ConcTree {
 /** The execution resulted in a value in this node */
 case class ValueNode(value: ConcreteValue, pc: ScExp) extends ConcTree {
   def unsat(branch: Boolean): Unit = throw new Exception("Cannot mark an branch node as unsatisfiable")
+  def take(branch: Boolean, pc: ScExp): ConcTree =
+    throw new Exception("cannot take a branch on a value node")
+
 }
 
 trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   case class ConcolicStore(map: Map[Addr, PostValue]) extends Store[Addr, PostValue] {
     def lookup(a: Addr): Option[PostValue] = map.get(a)
     def extend(a: Addr, v: PostValue): Store[Addr, PostValue] = ConcolicStore(map + (a -> v))
-    def update(a: Addr, v: PostValue): Store[Addr, PostValue] = extend(a, v) // strong update, so same as extend
   }
 
   case class ConcolicContext(
@@ -156,7 +159,7 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
     }
   }
 
-  override def withPC[X](f: PC => X): ScEvalM[X] = ConcolicMonad { context =>
+  override def withPc[X](f: PC => X): ScEvalM[X] = ConcolicMonad { context =>
     (context, Some(f(context.pc)))
   }
 
