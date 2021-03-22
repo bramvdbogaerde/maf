@@ -4,6 +4,8 @@ import maf.modular.contracts.semantics._
 import maf.core.{Address, Environment}
 import maf.language.contracts.ScExp
 import maf.core.Store
+import maf.core.BasicEnvironment
+import maf.language.contracts.ScNil
 
 trait ConcreteValue // TODO: move to other file
 
@@ -60,43 +62,140 @@ case class ValueNode(value: ConcreteValue, pc: ScExp) extends ConcTree {
   def unsat(branch: Boolean): Unit = throw new Exception("Cannot mark an branch node as unsatisfiable")
 }
 
-case class ConcolicContext(
-    env: Environment[Address],
-    store: Map[Address, ConcreteValue],
-    pc: ScExp,
-    root: ConcTree)
-
-case class ConcolicMonad[X](run: ConcolicContext => (ConcolicContext, Option[X]))
-object ConcolicMonadInstance extends ScAbstractSemanticsMonad[ConcolicMonad] {
-
-  /** Injects a value in the Monad */
-  override def pure[X](v: => X): ConcolicMonad[X] = {
-    ConcolicMonad(context => (context, Some(v)))
-  }
-
-  /**
-   * The semantics of this monad are that it behaves as a state monad, retrieving a state and returning
-   * an updated state together with a value, except that when running the composition operator and the
-   * first computation returns None as a value, then the second computation is not run, and the result
-   * is the updated state with None as a result
-   */
-  override def flatMap[X, Y](m: ConcolicMonad[X], f: X => ConcolicMonad[Y]): ConcolicMonad[Y] = ConcolicMonad { context =>
-    val (newContext, valueOpt) = m.run(context)
-    valueOpt match {
-      case Some(v) => f(v).run(newContext)
-      case None    => (newContext, None)
-    }
-  }
-
-  /** A computation composed with void will not be run */
-  override def void[X]: ConcolicMonad[X] = ConcolicMonad { context => (context, None) }
-}
-
 trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
+  case class ConcolicStore(map: Map[Addr, PostValue]) extends Store[Addr, PostValue] {
+    def lookup(a: Addr): Option[PostValue] = map.get(a)
+    def extend(a: Addr, v: PostValue): Store[Addr, PostValue] = ConcolicStore(map + (a -> v))
+    def update(a: Addr, v: PostValue): Store[Addr, PostValue] = extend(a, v) // strong update, so same as extend
+  }
+
+  case class ConcolicContext(
+      env: BasicEnvironment[Address],
+      store: ConcolicStore,
+      pc: ScExp,
+      root: ConcTree)
+
+  case class ConcolicMonad[X](run: ConcolicContext => (ConcolicContext, Option[X]))
+  def abstractMonadInstance: ScAbstractSemanticsMonad[ConcolicMonad] = new ScAbstractSemanticsMonad[ConcolicMonad] {
+
+    /** Injects a value in the Monad */
+    override def pure[X](v: => X): ConcolicMonad[X] = {
+      ConcolicMonad(context => (context, Some(v)))
+    }
+
+    /**
+     * The semantics of this monad are that it behaves as a state monad, retrieving a state and returning
+     * an updated state together with a value, except that when running the composition operator and the
+     * first computation returns None as a value, then the second computation is not run, and the result
+     * is the updated state with None as a result
+     */
+    override def flatMap[X, Y](m: ConcolicMonad[X], f: X => ConcolicMonad[Y]): ConcolicMonad[Y] = ConcolicMonad { context =>
+      val (newContext, valueOpt) = m.run(context)
+      valueOpt match {
+        case Some(v) => f(v).run(newContext)
+        case None    => (newContext, None)
+      }
+    }
+
+    /** A computation composed with void will not be run */
+    override def void[X]: ConcolicMonad[X] = ConcolicMonad { context => (context, None) }
+  }
+
   case class PS(pure: Val, symbolic: ScExp) extends IsPostValue
-  //case class ConcolicStore(map: Map[Addr, PostValue]) extends Store[Addr, PostValue]
+
+  def modifyTree(f: ConcTree => ConcTree): ScEvalM[()] = ConcolicMonad { context =>
+    (context.copy(root = f(context.root)), Some(()))
+  }
 
   override type M[X] = ConcolicMonad[X]
   override type PostValue = PS
-  //override type StoreCache = ConcolicStore
+  override type StoreCache = ConcolicStore
+  override type Val = ConcreteValue
+  override type ConcreteStore = StoreCache
+  override type Env = BasicEnvironment[Addr]
+  override type Addr = Address
+
+  override def modifyPC(f: PC => PC): ScEvalM[()] = ConcolicMonad { context =>
+    (context.copy(pc = f(context.pc)), Some(()))
+  }
+
+  override def modifyEnv(f: Env => Env): ScEvalM[()] = ConcolicMonad { context =>
+    (context.copy(env = f(context.env)), Some(()))
+  }
+
+  override def modifyStoreCache(f: StoreCache => StoreCache): ScEvalM[()] = ConcolicMonad { context =>
+    (context.copy(store = f(context.store)), Some(()))
+  }
+
+  override def withEnv[B](f: Env => ScEvalM[B]): ScEvalM[B] = ConcolicMonad { context =>
+    f(context.env).m.run(context)
+  }
+
+  override def value(v: Val, s: ScExp): PostValue = PS(v, s)
+
+  override def nondets[X](s: Set[ScEvalM[X]]): ScEvalM[X] = ConcolicMonad { context =>
+    // we only allow sets of size two,  that is because the program can only branch when using an if condition, which has only two successor states
+    assert(s.size <= 2)
+    val root = context.root
+    val cs = s.toList
+    val (leftContext, leftValue) = cs(0).m.run(context)
+    val (rightContext, rightValue) = cs(1).m.run(context)
+    (leftValue, rightValue) match {
+      case (Some(v), None) => {
+        val newRoot = root.take(true, leftContext.pc)
+        root.take(false, rightContext.pc)
+        (leftContext.copy(root = newRoot), Some(v))
+      }
+      case (None, Some(v)) => {
+        val newRoot = root.take(false, rightContext.pc)
+        root.take(true, leftContext.pc)
+        (rightContext.copy(root = newRoot), Some(v))
+      }
+
+      case (_, _) => throw new Exception("Non-determinism not allowed in concolic tester")
+    }
+  }
+
+  override def withPC[X](f: PC => X): ScEvalM[X] = ConcolicMonad { context =>
+    (context, Some(f(context.pc)))
+  }
+
+  override def withStoreCache[X](f: StoreCache => ScEvalM[X]): ScEvalM[X] = ConcolicMonad { context =>
+    f(context.store).m.run(context)
+  }
+
+  // Same as addToCache since we are not in an abstract domain
+  override def joinInCache(addr: Addr, value: PostValue): ScEvalM[()] = addToCache((addr, value))
+
+  override def options[X](c: ScEvalM[Set[X]]): ScEvalM[X] = ConcolicMonad { context =>
+    c.m.run(context) match {
+      case (newContext, Some(vs)) if vs.size == 1 => (newContext, Some(vs.toList(0)))
+      case (newContext, Some(vs)) if vs.size == 0 => (newContext, None)
+      case (newContext, None)                     => (newContext, None)
+      case (_, _)                                 => throw new Exception("only one or zero options allowed in concolic execution")
+    }
+  }
+
+  override def printStore: ScEvalM[()] = ???
+
+  override def write(addr: Addr, value: PostValue): ScEvalM[()] = modifyStoreCache { cache =>
+    cache.update(addr, value).asInstanceOf[StoreCache]
+  }
+
+  /** Forcefully write to the store */
+  def writeForce(addr: Addr, value: PostValue): ScEvalM[()] = write(addr, value)
+
+  /** Run the given computation without any initial context */
+  def run[A](c: ScEvalM[A]): A =
+    c.m
+      .run(
+        ConcolicContext(
+          env = BasicEnvironment(Map()),
+          store = ConcolicStore(Map()),
+          pc = ScNil(),
+          root = NilNode
+        )
+      )
+      ._2
+      .get
 }

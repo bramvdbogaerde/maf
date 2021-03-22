@@ -7,6 +7,7 @@ import maf.core.Address
 import maf.language.contracts.ScExp
 import maf.core.Environment
 import maf.core.BasicEnvironment
+import maf.language.contracts.ScNil
 
 trait Monad[M[_]] {
 
@@ -106,6 +107,8 @@ trait ScAbstractSemanticsMonadAnalysis {
       flatMap(_ => f)
   }
 
+  implicit def wrap[X](m: M[X]): ScEvalM[X] = ScEvalM(m)
+
   /** Injects the value in the monad */
   def pure[X](v: => X): ScEvalM[X] = ScEvalM(abstractMonadInstance.pure(v))
 
@@ -160,14 +163,18 @@ trait ScAbstractSemanticsMonadAnalysis {
    */
   def result(v: Val): ScEvalM[PostValue] = pure(value(v))
 
+  /** Modifies the PC using the given function */
+  def modifyPC(f: PC => PC): ScEvalM[()]
+
   /**
    * Replaces the path condition with another one and
    *  runs the given computation with the updated path condition
    */
-  def replacePc[X](pc: PC)(c: ScEvalM[X]): ScEvalM[X]
+  def replacePc[X](pc: PC)(c: ScEvalM[X]): ScEvalM[X] =
+    modifyPC(_ => pc) >> c
 
   /** Adds symbolic information to the given raw value */
-  def value(v: Val): PostValue
+  def value(v: Val): PostValue = value(v, ScNil())
 
   /** Adds the given symbolic information to the given raw value */
   def value(v: Val, s: ScExp): PostValue
@@ -249,6 +256,8 @@ trait ScAbstractSemanticsMonadAnalysis {
    */
   def withStoreCache[X](f: StoreCache => ScEvalM[X]): ScEvalM[X]
 
+  def modifyStoreCache(f: StoreCache => StoreCache): ScEvalM[()]
+
   /**
    * Returns a computation that applies the given function on the current store cache
    * and expects a tuple of a value and a new store cache
@@ -267,7 +276,9 @@ trait ScAbstractSemanticsMonadAnalysis {
    * used when overapproximations are not necessary, or when a force
    * update is required.
    */
-  def addToCache(mapping: (Addr, PostValue)): ScEvalM[()]
+  def addToCache(mapping: (Addr, PostValue)): ScEvalM[()] = modifyStoreCache { cache =>
+    cache.extend(mapping._1, mapping._2).asInstanceOf[StoreCache]
+  }
 
   /** Same as addToCache but joins the value in the cache according to some lattice (only for abstract domains) */
   def joinInCache(addr: Addr, value: PostValue): ScEvalM[()]
@@ -293,7 +304,9 @@ trait ScAbstractSemanticsMonadAnalysis {
   def evict(addresses: List[Addr]): ScEvalM[()]
 
   /** Reads from the given address in the store */
-  def read(addr: Addr): ScEvalM[PostValue]
+  def read(addr: Addr): ScEvalM[PostValue] = withStoreCache { cache =>
+    pure(cache.lookup(addr).get)
+  }
 
   /**
    * Writes the given value to the given address
