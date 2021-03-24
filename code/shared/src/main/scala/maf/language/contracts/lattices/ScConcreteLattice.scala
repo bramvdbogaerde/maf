@@ -9,6 +9,8 @@ import maf.language.scheme.SchemeLambdaExp
 import maf.language.scheme.lattices.{SchemeLattice, SchemeOp}
 import maf.language.scheme.interpreter.ConcreteValues
 import maf.lattice.interfaces.BoolLattice
+import maf.language.contracts.ScLattice._
+import maf.language.contracts.ScLattice
 
 object ScConcreteValues {
   sealed trait ScValue
@@ -54,6 +56,28 @@ object ScConcreteValues {
       elems: Map[BigInt, ScValue],
       init: ScValue)
       extends ScValue
+
+  /** Value of the error that gets generated when a contract is violated */
+
+  case class BlameValue(blame: Blame) extends ScValue
+
+  /** value for an arrow contract */
+  case class GrdValue(grd: Grd[ScConcreteAddress]) extends ScValue
+
+  /** value for a guarded function */
+  case class ArrValue(arr: Arr[ScConcreteAddress]) extends ScValue
+
+  /** An unknown symbolic value, used to represent user input or other sources of unknown input * */
+  case class OpqValue(opq: Opq) extends ScValue
+
+  /** A parameterless lambda */
+  case class ThunkValue(t: Thunk[ScConcreteAddress]) extends ScValue
+
+  /** A flat contract */
+  case class FlatValue(flat: Flat[ScConcreteAddress]) extends ScValue
+
+  /** A closure */
+  case class ClosureValue(clo: Clo[ScConcreteAddress]) extends ScValue
 }
 
 trait ScConcreteLattice extends ScSchemeLattice[ScConcreteValues.ScValue, ScConcreteAddress] {
@@ -214,4 +238,25 @@ trait ScConcreteLattice extends ScSchemeLattice[ScConcreteValues.ScValue, ScConc
 
     override def show(v: ScValue): String = v.toString()
   }
+
+  /** Inject a guard in the abstract domain */
+  def grd(grd: Grd[Addr]): ScValue = GrdValue(grd)
+
+  /** Inject an arrow (monitors on functions) in the abstract domain */
+  def arr(arr: Arr[Addr]): ScValue = ArrValue(arr)
+
+  /** Inject a blame in the abstract domain */
+  def blame(blame: Blame): ScValue = BlameValue(blame)
+
+  /** Inject an opaque value in the abstract domain */
+  def opq(opq: Opq): ScValue = OpqValue(opq)
+
+  /** Inject a thunk in the abstract domain */
+  def thunk(thunk: Thunk[Addr]): ScValue = ThunkValue(thunk)
+
+  /** Inject a flat contract in the abstract domain */
+  def flat(flat: Flat[Addr]): ScValue = FlatValue(flat)
+
+  /** Inject a closure in the abstract domain */
+  def closure(clo: ScLattice.Clo[Addr]): ScValue = ClosureValue(clo)
 }
