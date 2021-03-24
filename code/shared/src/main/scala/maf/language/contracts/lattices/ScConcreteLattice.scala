@@ -11,11 +11,22 @@ import maf.language.scheme.interpreter.ConcreteValues
 import maf.lattice.interfaces.BoolLattice
 import maf.language.contracts.ScLattice._
 import maf.language.contracts.ScLattice
+import maf.language.scheme.primitives.SchemePrimitive
+import maf.core.LatticeTopUndefined
 
 object ScConcreteValues {
   sealed trait ScValue
 
-  case class ScConcreteAddress(addr: ConcreteValues.Addr) extends Address {
+  trait ScConcreteAddress extends Address
+  object ScConcreteAddress {
+    def apply(addr: ConcreteValues.Addr): ScConcreteWrappedAddress = {
+      ScConcreteWrappedAddress(addr)
+    }
+  }
+
+  case class ScConcreteAddressIdentity(idn: Identity) extends ScConcreteAddress
+
+  case class ScConcreteWrappedAddress(addr: ConcreteValues.Addr) extends ScConcreteAddress {
     override def printable: Boolean = true
 
     override def idn: Identity = Identity.none
@@ -28,7 +39,8 @@ object ScConcreteValues {
     }
 
     override def canEqual(that: Any): Boolean = that match {
-      case ScConcreteAddress(thatAddr) => addr.canEqual(thatAddr)
+      case ScConcreteWrappedAddress(thatAddr) => addr.canEqual(thatAddr)
+      case _                                  => false
     }
   }
 
@@ -85,6 +97,7 @@ trait ScConcreteLattice extends ScSchemeLattice[ScConcreteValues.ScValue, ScConc
   import ConcreteValues.Value._
 
   type Addr = ScConcreteAddress
+  type L = ScValue
 
   /** An implementation of the Scheme lattice */
   override val schemeLattice: SchemeLattice[ScValue, ScConcreteAddress] = new SchemeLattice[ScValue, ScConcreteAddress] {
@@ -259,4 +272,103 @@ trait ScConcreteLattice extends ScSchemeLattice[ScConcreteValues.ScValue, ScConc
 
   /** Inject a closure in the abstract domain */
   def closure(clo: ScLattice.Clo[Addr]): ScValue = ClosureValue(clo)
+
+  /** Extract a set of arrow (monitors on functions) from the abstract value */
+  def getArr(value: L): Set[Arr[Addr]] = value match {
+    case ArrValue(arr) => Set(arr)
+    case _             => Set()
+  }
+
+  /** Extract a set of blames from the abstract value */
+  def getBlames(value: L): Set[Blame] = value match {
+    case BlameValue(blame) => Set(blame)
+    case _                 => Set()
+  }
+
+  /** Extract a set of guards from the abstract value */
+  def getGrd(value: L): Set[Grd[Addr]] = value match {
+    case GrdValue(grd) => Set(grd)
+    case _             => Set()
+  }
+
+  /** Extract a set of opaque values from the abstract value */
+  def getOpq(value: L): Set[Opq] = value match {
+    case OpqValue(opq) => Set(opq)
+    case _             => Set()
+  }
+
+  /** Extracts the set of thunks from the abstract domain */
+  def getThunk(value: L): Set[Thunk[Addr]] = value match {
+    case ThunkValue(thunk) => Set(thunk)
+    case _                 => Set()
+  }
+
+  /** Extracts the set of flat contracts from the abtract values */
+  def getFlat(value: L): Set[Flat[Addr]] = value match {
+    case FlatValue(flat) => Set(flat)
+    case _               => Set()
+  }
+
+  /** Extrracts a closure from the abstract domai n */
+  def getClosure(value: L): Set[ScLattice.Clo[Addr]] = value match {
+    case ClosureValue(clo) => Set(clo)
+    case _                 => Set()
+  }
+
+  /** Returns the symbolic representation of the value if available */
+  def getSymbolic(value: L): Option[String] = value match {
+    case ConcreteSchemeValue(svalue) =>
+      svalue match {
+        case prim: ConcreteValues.Prim => Some(prim.name)
+        case _                         => None // TODO: values such as numbers and so on can also be symbolicly represented
+      }
+    case _ => None
+  }
+
+  /** Returns the set of scheme primitives of the value */
+  def getPrimitives(value: L): Set[SchemePrimitive[L, Addr]] = ??? // TODO: implement scheme primitives
+
+  /*==================================================================================================================*/
+
+  def isDefinitelyOpq(value: L): Boolean = value match {
+    case OpqValue(_) => true
+    case _           => false
+  }
+
+  def isDefinitelyArrow(value: L): Boolean = value match {
+    case ArrValue(_) => true
+    case _           => false
+  }
+
+  /** Returns true if the value is possible a blame */
+  def isBlame(value: L): Boolean = value match {
+    case BlameValue(_) => true
+    case _             => false
+  }
+
+  /** Returns true if the value is possibly a thunk */
+  def isThunk(value: L): Boolean = value match {
+    case ThunkValue(_) => true
+    case _             => false
+  }
+
+  /** Returns true if the value is possible a flat contract */
+  def isFlat(value: L): Boolean = value match {
+    case FlatValue(_) => true
+    case _            => false
+  }
+
+  /** Returns true iof the value is possibly a closure */
+  def isClosure(value: L): Boolean = value match {
+    case ClosureValue(_) => true
+    case _               => false
+  }
+
+  override def join(x: L, y: => L): L =
+    throw new Exception("not supposed to join in the concrete domain")
+
+  override def bottom: L = schemeLattice.bottom
+
+  def op(op: ScOp)(args: List[L]): MayFail[L, maf.core.Error] =
+    throw new Exception("operations should be implemented as primitives")
 }

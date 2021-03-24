@@ -1,13 +1,13 @@
 package maf.modular.contracts
 
 import maf.modular.contracts.semantics._
-import maf.core.{Address, Environment}
 import maf.language.contracts.ScExp
 import maf.core.Store
 import maf.core.BasicEnvironment
 import maf.language.contracts.ScNil
-
-trait ConcreteValue // TODO: move to other file
+import maf.core.Identity
+import maf.language.contracts.lattices.ScConcreteValues
+import maf.language.contracts.lattices.ScConcreteValues.ScConcreteAddress
 
 /** A tree structure to keep track of the space we need to explore. */
 trait ConcTree {
@@ -59,7 +59,7 @@ case class ErrorNode(error: String, pc: ScExp) extends ConcTree {
 }
 
 /** The execution resulted in a value in this node */
-case class ValueNode(value: ConcreteValue, pc: ScExp) extends ConcTree {
+case class ValueNode(value: ScConcreteValues.ScValue, pc: ScExp) extends ConcTree {
   def unsat(branch: Boolean): Unit = throw new Exception("Cannot mark an branch node as unsatisfiable")
   def take(branch: Boolean, pc: ScExp): ConcTree =
     throw new Exception("cannot take a branch on a value node")
@@ -73,10 +73,11 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   }
 
   case class ConcolicContext(
-      env: BasicEnvironment[Address],
+      env: BasicEnvironment[ScConcreteAddress],
       store: ConcolicStore,
       pc: ScExp,
-      root: ConcTree)
+      root: ConcTree,
+      ignoredIdentities: Set[Identity] = Set())
 
   case class ConcolicMonad[X](run: ConcolicContext => (ConcolicContext, Option[X]))
   def abstractMonadInstance: ScAbstractSemanticsMonad[ConcolicMonad] = new ScAbstractSemanticsMonad[ConcolicMonad] {
@@ -113,10 +114,10 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   override type M[X] = ConcolicMonad[X]
   override type PostValue = PS
   override type StoreCache = ConcolicStore
-  override type Val = ConcreteValue
+  override type Val = ScConcreteValues.ScValue
   override type ConcreteStore = StoreCache
   override type Env = BasicEnvironment[Addr]
-  override type Addr = Address
+  override type Addr = ScConcreteAddress
 
   override def modifyPC(f: PC => PC): ScEvalM[()] = ConcolicMonad { context =>
     (context.copy(pc = f(context.pc)), Some(()))
@@ -130,7 +131,22 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
     f(context.env).m.run(context)
   }
 
+  override def withIgnoredIdentities[X](f: List[Identity] => X): ScEvalM[X] = ConcolicMonad { context =>
+    val res = f(context.ignoredIdentities.toList)
+    (context, Some(res))
+  }
+
+  override def addIgnored(idns: Iterable[Identity]): ScEvalM[Unit] = ConcolicMonad { context =>
+    (context.copy(ignoredIdentities = context.ignoredIdentities ++ idns), Some(()))
+  }
+
   override def value(v: Val, s: ScExp): PostValue = PS(v, s)
+
+  override def nondet[X](
+      t: ScEvalM[X],
+      f: ScEvalM[X],
+      v: Option[Boolean]
+    ): ScEvalM[X] = nondets(Set(t, f))
 
   override def nondets[X](s: Set[ScEvalM[X]]): ScEvalM[X] = ConcolicMonad { context =>
     // we only allow sets of size two,  that is because the program can only branch when using an if condition, which has only two successor states
