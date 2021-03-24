@@ -126,10 +126,6 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
     (context.copy(env = f(context.env)), Some(()))
   }
 
-  override def modifyStoreCache(f: StoreCache => StoreCache): ScEvalM[()] = ConcolicMonad { context =>
-    (context.copy(store = f(context.store)), Some(()))
-  }
-
   override def withEnv[B](f: Env => ScEvalM[B]): ScEvalM[B] = ConcolicMonad { context =>
     f(context.env).m.run(context)
   }
@@ -163,7 +159,12 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
     (context, Some(f(context.pc)))
   }
 
-  override def withStoreCache[X](f: StoreCache => ScEvalM[X]): ScEvalM[X] = ConcolicMonad { context =>
+  override def withStoreCacheExplicit[X](f: StoreCache => (X, StoreCache)): ScEvalM[X] = ConcolicMonad { context =>
+    val (x, next) = f(context.store)
+    (context.copy(store = next), Some(x))
+  }
+
+  override def withStoreCache[X](f: ConcolicStore => ScEvalM[X]): ScEvalM[X] = ConcolicMonad { context =>
     f(context.store).m.run(context)
   }
 

@@ -256,16 +256,14 @@ trait ScAbstractSemanticsMonadAnalysis {
    */
   def withStoreCache[X](f: StoreCache => ScEvalM[X]): ScEvalM[X]
 
-  def modifyStoreCache(f: StoreCache => StoreCache): ScEvalM[()]
-
   /**
    * Returns a computation that applies the given function on the current store cache
    * and expects a tuple of a value and a new store cache
    */
-  def withStoreCache[X](f: StoreCache => (X, StoreCache)): ScEvalM[X]
+  def withStoreCacheExplicit[X](f: StoreCache => (X, StoreCache)): ScEvalM[X]
 
-  def withStoreCache[X](f: StoreCache => StoreCache): ScEvalM[()] =
-    withStoreCache(cache => ((), f(cache)))
+  def modifyStoreCache(f: StoreCache => StoreCache): ScEvalM[()] =
+    withStoreCacheExplicit(cache => ((), f(cache)))
 
   // TODO: we don't want to expose the entire context, check the big step semantics
   // to ensure that we only use the auxilary functions
