@@ -42,7 +42,7 @@ object SCExpCompiler {
 
     case ListNil(idn) => ScNil(idn)
     case SExpPair(car, cdr, idn) =>
-      ScCons(compile_quoted(car), compile_quoted(cdr), idn)
+      ScFunctionAp.primitive("cons", List(car, cdr).map(compile_quoted), idn)
   }
 
   def compile_letrec_bindings(bindings: SExp): (List[ScIdentifier], List[ScExp]) =
@@ -245,9 +245,12 @@ object SCExpCompiler {
     case Ident("cons") :: car :: cdr :: ListNil(_) =>
       val compiledCar = compile(car)
       val compiledCdr = compile(cdr)
-      ScCons(
-        compiledCar,
-        compiledCdr,
+      ScFunctionAp.primitive(
+        "cons",
+        List(
+          compiledCar,
+          compiledCdr
+        ),
         prog.idn
       )
 

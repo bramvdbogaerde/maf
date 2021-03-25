@@ -158,6 +158,15 @@ trait ScAbstractSemanticsMonadAnalysis {
   }
 
   /**
+   * Executes cthe given action for its side effects and returns
+   *  the return value
+   */
+  def pureWith[A](c: => A): ScEvalM[A] = unit.flatMap { _ =>
+    val result = c
+    pure(result)
+  }
+
+  /**
    * Returns a computation that
    * wraps the given value into a value with symbolic information,
    */

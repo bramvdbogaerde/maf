@@ -87,7 +87,7 @@ trait ScSemantics extends ScAbstractSemanticsMonadAnalysis {
   def callPrimitive(p: PrimitiveOperator, arg: Argument): ScEvalM[PostValue] = callPrimitive(p, List(arg))
 
   /** Calls the given closure with the given arguments */
-  def call(clo: ScLattice.Clo[Addr], operands: List[Val]): ScEvalM[Val]
+  def call(clo: ScLattice.Clo[Addr], operands: List[PostValue]): ScEvalM[PostValue]
 
   /**
    * Looks up the given identifier and returns its address if defined, otherwise allocates an address
@@ -146,7 +146,6 @@ trait ScSharedSemantics extends ScSemantics {
     case ScDefineAnnotatedFn(name, parameters, contract, expression, idn) =>
       evalDefineAnnotatedFn(name, parameters, contract, expression, idn)
     case ScProvideContracts(variables, contracts, _) => evalProvideContracts(variables, contracts)
-    case ScCons(car, cdr, _)                         => evalCons(car, cdr)
     case exp @ ScCar(pai, _)                         => evalCar(pai, exp)
     case exp @ ScCdr(pai, _)                         => evalCdr(pai, exp)
     case ScNil(_)                                    => result(lattice.schemeLattice.nil)
@@ -177,12 +176,6 @@ trait ScSharedSemantics extends ScSemantics {
           cond(value, enrichOpaqueInStore(expr, evalAnd(exprs)), result(lattice.schemeLattice.bool(false)))
         }
     }
-
-  def evalCons(car: ScExp, cdr: ScExp): ScEvalM[PostValue] = for {
-    evaluatedCar <- eval(car)
-    evaluatedCdr <- eval(cdr)
-    consValue <- allocCons(evaluatedCar, evaluatedCdr, car.idn, cdr.idn)
-  } yield consValue
 
   def allocCons(
       car: PostValue,
@@ -438,7 +431,7 @@ trait ScSharedSemantics extends ScSemantics {
     val cloAp =
       lattice
         .getClosure(operator.pure)
-        .map { clo => call(clo, operands.map(_.pure)).flatMap(result) }
+        .map { clo => call(clo, operands).flatMap(result) }
 
     // 3. Application of a monitored function (arrow)
     val arrAp = lattice.getArr(operator.pure).map { arr =>

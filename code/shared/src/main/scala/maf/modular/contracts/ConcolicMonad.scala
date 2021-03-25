@@ -8,6 +8,7 @@ import maf.language.contracts.ScNil
 import maf.core.Identity
 import maf.language.contracts.lattices.ScConcreteValues
 import maf.language.contracts.lattices.ScConcreteValues.ScConcreteAddress
+import maf.language.scheme.interpreter.ConcreteValues
 
 /** A tree structure to keep track of the space we need to explore. */
 trait ConcTree {
@@ -114,7 +115,7 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   override type M[X] = ConcolicMonad[X]
   override type PostValue = PS
   override type StoreCache = ConcolicStore
-  override type Val = ScConcreteValues.ScValue
+  override type Val = ConcreteValues.Value
   override type ConcreteStore = StoreCache
   override type Env = BasicEnvironment[Addr]
   override type Addr = ScConcreteAddress

@@ -266,6 +266,16 @@ case class ScFunctionAp(
   }
 }
 
+object ScFunctionAp {
+  def primitive(
+      name: String,
+      arguments: List[ScExp],
+      idn: Identity
+    ): ScFunctionAp = {
+    ScFunctionAp(ScIdentifier("cons", idn), arguments, idn)
+  }
+}
+
 case class ScBegin(expressions: List[ScExp], idn: Identity) extends ScExp {
 
   /** The set of free variables appearing in this expression. */

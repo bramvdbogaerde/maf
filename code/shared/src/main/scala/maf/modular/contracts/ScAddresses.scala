@@ -3,7 +3,7 @@ package maf.modular.contracts
 import maf.core.{Address, Identity}
 import maf.language.contracts.ScIdentifier
 
-sealed trait ScAddresses[+Context] extends Address
+trait ScAddresses[+Context] extends Address
 case class ScVarAddr[Context](id: ScIdentifier, context: Context) extends ScAddresses[Context] {
 
   /**

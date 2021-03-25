@@ -13,18 +13,19 @@ import maf.language.contracts.ScLattice._
 import maf.language.contracts.ScLattice
 import maf.language.scheme.primitives.SchemePrimitive
 import maf.core.LatticeTopUndefined
+import maf.modular.contracts.ScAddresses
 
 object ScConcreteValues {
-  sealed trait ScValue
+  sealed trait ScValue extends ConcreteValues.Value
 
-  trait ScConcreteAddress extends Address
+  trait ScConcreteAddress extends ScAddresses[()]
   object ScConcreteAddress {
     def apply(addr: ConcreteValues.Addr): ScConcreteWrappedAddress = {
       ScConcreteWrappedAddress(addr)
     }
   }
 
-  case class ScConcreteAddressIdentity(idn: Identity) extends ScConcreteAddress
+  case class ScConcreteAddressIdentity(idn: Identity, n: Int) extends ScConcreteAddress
 
   case class ScConcreteWrappedAddress(addr: ConcreteValues.Addr) extends ScConcreteAddress {
     override def printable: Boolean = true
@@ -49,7 +50,15 @@ object ScConcreteValues {
         (k, ScConcreteAddress(v))
       })
 
-  case class ConcreteSchemeValue(v: ConcreteValues.Value) extends ScValue
+  object ConcreteSchemeValue {
+    def apply(v: ConcreteValues.Value) = v
+    def unapply(that: Any): Option[(ConcreteValues.Value)] = that match {
+      case v: ConcreteValues.Value => Some(v)
+      case _                       => None
+    }
+
+  }
+  //case class ConcreteSchemeValue(v: ConcreteValues.Value) extends ScValue
 
   /**
    * A pair of two values, this is also included in the scheme intepreter, but
@@ -97,6 +106,7 @@ trait ScConcreteLattice extends ScSchemeLattice[ScConcreteValues.ScValue, ScConc
   import ConcreteValues.Value._
 
   type Addr = ScConcreteAddress
+  type ScValue = ConcreteValues.Value
   type L = ScValue
 
   /** An implementation of the Scheme lattice */
