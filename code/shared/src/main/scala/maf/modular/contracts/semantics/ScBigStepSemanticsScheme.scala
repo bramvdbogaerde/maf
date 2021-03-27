@@ -30,6 +30,9 @@ trait ScSemantics extends ScAbstractSemanticsMonadAnalysis {
     /** Allocates an address for a variable */
     def allocVar(id: ScIdentifier): Addr
 
+    /** Allocates an address for a primitive */
+    def allocPrim(name: String): Addr
+
     /**
      * Views an address from the abstract ScAddreses class
      * as an address for this semanticds
@@ -431,7 +434,7 @@ trait ScSharedSemantics extends ScSemantics {
     val cloAp =
       lattice
         .getClosure(operator.pure)
-        .map { clo => call(clo, operands).flatMap(result) }
+        .map { clo => call(clo, operands) }
 
     // 3. Application of a monitored function (arrow)
     val arrAp = lattice.getArr(operator.pure).map { arr =>

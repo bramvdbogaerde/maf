@@ -4,7 +4,6 @@ import maf.core
 import maf.core.{Address, BasicEnvironment, Environment, Identity, MayFail}
 import maf.language.CScheme.TID
 import maf.language.contracts.ScSchemeLattice
-import maf.language.contracts.lattices.ScConcreteValues.ScConcreteAddress
 import maf.language.scheme.SchemeLambdaExp
 import maf.language.scheme.lattices.{SchemeLattice, SchemeOp}
 import maf.language.scheme.interpreter.ConcreteValues
@@ -12,43 +11,34 @@ import maf.lattice.interfaces.BoolLattice
 import maf.language.contracts.ScLattice._
 import maf.language.contracts.ScLattice
 import maf.language.scheme.primitives.SchemePrimitive
-import maf.core.LatticeTopUndefined
-import maf.modular.contracts.ScAddresses
 
 object ScConcreteValues {
   sealed trait ScValue extends ConcreteValues.Value
 
-  trait ScConcreteAddress extends ScAddresses[()]
-  object ScConcreteAddress {
-    def apply(addr: ConcreteValues.Addr): ScConcreteWrappedAddress = {
-      ScConcreteWrappedAddress(addr)
-    }
-  }
-
-  case class ScConcreteAddressIdentity(idn: Identity, n: Int) extends ScConcreteAddress
-
-  case class ScConcreteWrappedAddress(addr: ConcreteValues.Addr) extends ScConcreteAddress {
+  case class ScAddr(val addr: ConcreteValues.Addr) extends Address {
     override def printable: Boolean = true
 
     override def idn: Identity = Identity.none
 
-    override def productArity: Int = 1
-
-    override def productElement(n: Int): Any = n match {
-      case 0 => addr
-      case _ => throw new NoSuchElementException
-    }
-
-    override def canEqual(that: Any): Boolean = that match {
-      case ScConcreteWrappedAddress(thatAddr) => addr.canEqual(thatAddr)
-      case _                                  => false
-    }
+    override def toString(): String =
+      s"<sc: ${addr}>"
   }
 
   implicit class EnvWrapper(m: ConcreteValues.Env)
-      extends BasicEnvironment[ScConcreteAddress](m.map { case (k, v) =>
-        (k, ScConcreteAddress(v))
+      extends BasicEnvironment[ScAddr](m.map { case (k, v) =>
+        (k, new ScAddr(v))
       })
+
+  /** Fetches the concrete address from a wrapped address */
+  implicit def toConcreteAddr(addr: ScAddr): ConcreteValues.Addr = addr.addr
+
+  /** Turns a map of ScAddr'esses into a map of ConcreteValues.Addr'esses */
+  implicit def toConcreteMap(map: Map[String, ScAddr]): Map[String, ConcreteValues.Addr] = map.map { case (k, v) =>
+    (k, v)
+  }
+
+  /** Convert a concrete scheme address to a concrete sc address */
+  implicit def toScAddr(addr: ConcreteValues.Addr): ScAddr = ScAddr(addr)
 
   object ConcreteSchemeValue {
     def apply(v: ConcreteValues.Value) = v
@@ -56,8 +46,8 @@ object ScConcreteValues {
       case v: ConcreteValues.Value => Some(v)
       case _                       => None
     }
-
   }
+
   //case class ConcreteSchemeValue(v: ConcreteValues.Value) extends ScValue
 
   /**
@@ -65,7 +55,7 @@ object ScConcreteValues {
    * we cannot use it for the Scheme + contract interpreter because our value domain
    * is strictly larger than the vanilla Scheme domain
    */
-  case class ConsValue(car: ScValue, cdr: ScValue) extends ScValue
+  case class ConsValue(car: ConcreteValues.Value, cdr: ConcreteValues.Value) extends ScValue
 
   /**
    * A vector of values, this is also included in the Scheme interpreter,
@@ -83,34 +73,34 @@ object ScConcreteValues {
   case class BlameValue(blame: Blame) extends ScValue
 
   /** value for an arrow contract */
-  case class GrdValue(grd: Grd[ScConcreteAddress]) extends ScValue
+  case class GrdValue(grd: Grd[ScAddr]) extends ScValue
 
   /** value for a guarded function */
-  case class ArrValue(arr: Arr[ScConcreteAddress]) extends ScValue
+  case class ArrValue(arr: Arr[ScAddr]) extends ScValue
 
   /** An unknown symbolic value, used to represent user input or other sources of unknown input * */
   case class OpqValue(opq: Opq) extends ScValue
 
   /** A parameterless lambda */
-  case class ThunkValue(t: Thunk[ScConcreteAddress]) extends ScValue
+  case class ThunkValue(t: Thunk[ScAddr]) extends ScValue
 
   /** A flat contract */
-  case class FlatValue(flat: Flat[ScConcreteAddress]) extends ScValue
+  case class FlatValue(flat: Flat[ScAddr]) extends ScValue
 
   /** A closure */
-  case class ClosureValue(clo: Clo[ScConcreteAddress]) extends ScValue
+  case class ClosureValue(clo: Clo[ScAddr]) extends ScValue
 }
 
-trait ScConcreteLattice extends ScSchemeLattice[ScConcreteValues.ScValue, ScConcreteAddress] {
+trait ScConcreteLattice extends ScSchemeLattice[ConcreteValues.Value, ScConcreteValues.ScAddr] {
   import ScConcreteValues._
   import ConcreteValues.Value._
 
-  type Addr = ScConcreteAddress
+  type Addr = ScConcreteValues.ScAddr
   type ScValue = ConcreteValues.Value
   type L = ScValue
 
   /** An implementation of the Scheme lattice */
-  override val schemeLattice: SchemeLattice[ScValue, ScConcreteAddress] = new SchemeLattice[ScValue, ScConcreteAddress] {
+  override val schemeLattice: SchemeLattice[ScValue, Addr] = new SchemeLattice[ScValue, Addr] {
 
     /** Can this value be considered true for conditionals? */
     override def isTrue(x: ScValue): Boolean = x match {
@@ -149,7 +139,7 @@ trait ScConcreteLattice extends ScSchemeLattice[ScConcreteValues.ScValue, ScConc
 
     /** Extract pointers contained in this value */
     override def getPointerAddresses(x: ScValue): Set[Addr] = x match {
-      case ConcreteSchemeValue(Pointer(v)) => Set(ScConcreteAddress(v))
+      case ConcreteSchemeValue(Pointer(v)) => Set(v)
       case _                               => Set()
     }
 
@@ -191,14 +181,8 @@ trait ScConcreteLattice extends ScSchemeLattice[ScConcreteValues.ScValue, ScConc
 
     /** Injection of a closure */
     override def closure(x: (SchemeLambdaExp, Env)): ScValue = x._2 match {
-      case BasicEnvironment(m) =>
-        ConcreteSchemeValue(
-          Clo(x._1,
-              m.map { case (k, v) =>
-                (k, v.addr)
-              }
-          )
-        )
+      case e: BasicEnvironment[Addr] =>
+        Clo(x._1, e.content)
     }
 
     /** Injection of a symbol */
@@ -215,7 +199,7 @@ trait ScConcreteLattice extends ScSchemeLattice[ScConcreteValues.ScValue, ScConc
     override def nil: ScValue = ConcreteSchemeValue(Nil)
 
     /** Injection of a pointer (to a cons cell, vector, etc.) */
-    override def pointer(a: Addr): ScValue = ConcreteSchemeValue(Pointer(a.addr))
+    override def pointer(a: Addr): ScValue = ConcreteSchemeValue(Pointer(a))
 
     /** Injection of a continuation */
     override def cont(k: K): ScValue =

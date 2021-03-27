@@ -20,15 +20,17 @@ import maf.language.contracts.ScNil
 import maf.language.scheme.interpreter.IO
 import maf.language.scheme.interpreter.EmptyIO
 import maf.language.scheme.SchemeFuncall
+import maf.core.BasicEnvironment
+import maf.language.scheme.interpreter.ConcreteValues.AddrInfo
 
-class ConcolicTester extends ScSharedSemantics with ConcolicMonadAnalysis {
+trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnalysis {
   import ScConcreteValues._
 
-  override def evict(addresses: List[ScConcreteAddress]): ScEvalM[Unit] = unit
+  override def evict(addresses: List[ScConcreteValues.ScAddr]): ScEvalM[Unit] = unit
 
   override type Prim = ConcreteValues.Prim
 
-  implicit override val lattice: ScSchemeLattice[ScConcreteValues.ScValue, Addr] = new ScConcreteLattice {}
+  implicit override val lattice: ScSchemeLattice[Val, Addr] = new ScConcreteLattice {}
 
   private var firstFree: Int = 0
   private def addr: Int = {
@@ -39,8 +41,8 @@ class ConcolicTester extends ScSharedSemantics with ConcolicMonadAnalysis {
 
   override val allocator: Allocator = new Allocator {
 
-    override def alloc(idn: Identity): ScConcreteAddress =
-      ScConcreteAddressIdentity(idn, addr)
+    override def alloc(idn: Identity): ScConcreteValues.ScAddr =
+      (addr, AddrInfo.IdnAddr(idn))
 
     override def allocCons(
         car: PS,
@@ -49,14 +51,17 @@ class ConcolicTester extends ScSharedSemantics with ConcolicMonadAnalysis {
         cdrIdn: Identity
       ): ScEvalM[PS] = ???
 
-    override def allocVar(id: ScIdentifier): ScConcreteAddress = {
-      ScConcreteWrappedAddress((addr, VarAddr(Identifier(id.name, id.idn))))
-    }
+    override def allocVar(id: ScIdentifier): ScConcreteValues.ScAddr =
+      (addr, VarAddr(Identifier(id.name, id.idn)))
 
-    override def view[Context](addr: ScAddresses[Context]): ScConcreteAddress =
+    override def allocPrim(name: String): ScConcreteValues.ScAddr =
+      // addresses to primitives are deterministicly generated
+      (0, AddrInfo.PrmAddr(name))
+
+    override def view[Context](addr: ScAddresses[Context]): ScConcreteValues.ScAddr =
       // safety: as our addresses in the store are always ScConcreteAddress'es it is impossible that
       // view will be called with a different type of address, hence the asInstanceOf call never fails at runtime
-      addr.asInstanceOf[ScConcreteAddress]
+      addr.asInstanceOf[ScConcreteValues.ScAddr]
 
   }
 
@@ -74,11 +79,11 @@ class ConcolicTester extends ScSharedSemantics with ConcolicMonadAnalysis {
 
     override def extendStore(a: ConcreteValues.Addr, v: ConcreteValues.Value): Unit = {
       // TODO: generate symbolic representation of Scheme value or do a gensym
-      lstore = lstore.extend(ScConcreteWrappedAddress(a), PS(ConcreteSchemeValue(v), ScNil())).asInstanceOf[StoreCache]
+      lstore = lstore.extend(a, PS(ConcreteSchemeValue(v), ScNil())).asInstanceOf[StoreCache]
     }
 
     override def lookupStore(a: ConcreteValues.Addr): ConcreteValues.Value = {
-      lstore.lookup(ScConcreteWrappedAddress(a)).map(v => v.pure).get
+      lstore.lookup(a).map(v => v.pure).get
     }
 
     override val stack: Boolean = false
@@ -108,7 +113,7 @@ class ConcolicTester extends ScSharedSemantics with ConcolicMonadAnalysis {
     _ <- modifyStoreCache { store => store.copy(map = store.map ++ interop.lstore.map) }
   } yield PS(result, ScNil()) // TODO: return a valid post value after applying the primitive
 
-  override def call(clo: ScLattice.Clo[ScConcreteAddress], operands: List[PostValue]): ScEvalM[PostValue] = {
+  override def call(clo: ScLattice.Clo[ScConcreteValues.ScAddr], operands: List[PostValue]): ScEvalM[PostValue] = {
     val addresses = clo.parameters.map(p => allocator.allocVar(p))
     val names = clo.parameters.map(_.name)
     local((_) => clo.env.extend(names.zip(addresses)).asInstanceOf[Env], {
@@ -118,7 +123,7 @@ class ConcolicTester extends ScSharedSemantics with ConcolicMonadAnalysis {
   }
 
   // TODO: check if this is generic enough to be placed higher in the hierachy
-  override def lookupOrDefine(identifier: ScIdentifier): ScEvalM[ScConcreteAddress] = modifyEnv { env =>
+  override def lookupOrDefine(identifier: ScIdentifier): ScEvalM[ScConcreteValues.ScAddr] = modifyEnv { env =>
     env.lookup(identifier.name) match {
       case Some(_) => env
       case None =>
@@ -134,4 +139,56 @@ class ConcolicTester extends ScSharedSemantics with ConcolicMonadAnalysis {
    */
   override def solve(pc: ScExp): Boolean = true
 
+}
+
+/** A convience class to easily instantiate a concolic analysis */
+abstract class ConcolicTesting(exp: ScExp) extends ConcolicAnalysisSemantics {
+  import ConcreteValues.Value
+
+  private var _results: List[Value] = List()
+  def results: List[Value] = _results
+
+  /**
+   * Creates an initial environment with all the necessary primitives
+   * mapped to primitive addresses
+   */
+  private def initialEnv: BasicEnvironment[ScConcreteValues.ScAddr] = {
+    BasicEnvironment(primitives.map(p => (p, allocator.allocPrim(p))).toMap)
+  }
+
+  /**
+   * Creates an initial store where addresses of the primitives are
+   * mapped to the actual primitives
+   */
+  private def initialConcolicStore: ConcolicStore = {
+    ConcolicStore(primitives.map(p => (allocator.allocPrim(p), PS(ConcreteValues.Value.Primitive(p), ScIdentifier(p, Identity.none)))).toMap)
+  }
+
+  /**
+   * Creates an initial context, starting from the given
+   * root element.
+   */
+  private def initialContext(
+      root: Option[ConcTree] = None,
+      pc: Option[PC] = None
+    ): ConcolicContext =
+    ConcolicContext(
+      env = initialEnv,
+      store = initialConcolicStore,
+      pc = ScNil(),
+      root = ConcTree.root
+    )
+
+  def analyzeWithTimeout(timeout: Timeout.T): Unit = {
+    val (_, value) = eval(exp).m.run(initialContext())
+    _results = value.get.pure :: _results
+  }
+
+  def analyze(): Unit = analyzeWithTimeout(Timeout.none)
+
+  /**
+   * Checks whether the given path condition is satisfiable, and
+   * returns example outputs
+   */
+  def isSat(exp: ScExp): List[Val]
 }

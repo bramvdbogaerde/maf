@@ -89,6 +89,8 @@ abstract class SimpleScSemantics(prg: ScExp)
         /** Allocates an address for a variable */
         override def allocVar(id: ScIdentifier): Addr = ???
 
+        override def allocPrim(name: String): Addr = ???
+
         /**
          * Views an address from the abstract ScAddreses class
          * as an address for this semanticds
@@ -126,7 +128,7 @@ abstract class SimpleScSemantics(prg: ScExp)
       override def callPrimitive(p: PrimitiveOperator, args: List[Argument]): ScEvalM[PS] = ???
 
       /** Calls the given closure with the given arguments */
-      override def call(clo: ScLattice.Clo[SimpleScSemantics.this.Addr], operands: List[Value]): ScEvalM[Value] = ???
+      override def call(clo: ScLattice.Clo[SimpleScSemantics.this.Addr], operands: List[PostValue]): ScEvalM[PostValue] = ???
 
       /**
        * Looks up the given identifier and returns its address if defined, otherwise allocates an address

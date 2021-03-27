@@ -38,6 +38,8 @@ object ConcreteValues {
 
     case class RetAddr(exp: SchemeExp) extends AddrInfo
 
+    case class IdnAddr(idn: Identity) extends AddrInfo
+
   }
 
   object Value {

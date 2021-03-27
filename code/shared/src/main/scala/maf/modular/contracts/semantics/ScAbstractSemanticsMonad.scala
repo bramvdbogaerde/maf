@@ -9,6 +9,11 @@ import maf.core.Environment
 import maf.core.BasicEnvironment
 import maf.language.contracts.ScNil
 
+case class AddrNotFound[A](addr: A) extends Exception {
+  override def getMessage(): String =
+    s"Address ${addr} not found"
+}
+
 trait Monad[M[_]] {
 
   /** Injects a value in the Monad */
@@ -312,7 +317,7 @@ trait ScAbstractSemanticsMonadAnalysis {
 
   /** Reads from the given address in the store */
   def read(addr: Addr): ScEvalM[PostValue] = withStoreCache { cache =>
-    pure(cache.lookup(addr).get)
+    pure(cache.lookup(addr).getOrElse(throw AddrNotFound(addr)))
   }
 
   /**

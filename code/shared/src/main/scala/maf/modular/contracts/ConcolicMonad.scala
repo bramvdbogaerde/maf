@@ -7,7 +7,6 @@ import maf.core.BasicEnvironment
 import maf.language.contracts.ScNil
 import maf.core.Identity
 import maf.language.contracts.lattices.ScConcreteValues
-import maf.language.contracts.lattices.ScConcreteValues.ScConcreteAddress
 import maf.language.scheme.interpreter.ConcreteValues
 
 /** A tree structure to keep track of the space we need to explore. */
@@ -15,6 +14,14 @@ trait ConcTree {
   val pc: ScExp
   def unsat(branch: Boolean): Unit
   def take(branch: Boolean, pc: ScExp): ConcTree
+}
+
+object ConcTree {
+  def root: ConcTree = TreeNode(
+    left = NilNode,
+    right = NilNode,
+    pc = ScNil()
+  )
 }
 
 case class TreeNode(
@@ -74,7 +81,7 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   }
 
   case class ConcolicContext(
-      env: BasicEnvironment[ScConcreteAddress],
+      env: BasicEnvironment[ScConcreteValues.ScAddr],
       store: ConcolicStore,
       pc: ScExp,
       root: ConcTree,
@@ -118,7 +125,7 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   override type Val = ConcreteValues.Value
   override type ConcreteStore = StoreCache
   override type Env = BasicEnvironment[Addr]
-  override type Addr = ScConcreteAddress
+  override type Addr = ScConcreteValues.ScAddr
 
   override def modifyPC(f: PC => PC): ScEvalM[()] = ConcolicMonad { context =>
     (context.copy(pc = f(context.pc)), Some(()))
@@ -150,25 +157,34 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
     ): ScEvalM[X] = nondets(Set(t, f))
 
   override def nondets[X](s: Set[ScEvalM[X]]): ScEvalM[X] = ConcolicMonad { context =>
-    // we only allow sets of size two,  that is because the program can only branch when using an if condition, which has only two successor states
-    assert(s.size <= 2)
-    val root = context.root
-    val cs = s.toList
-    val (leftContext, leftValue) = cs(0).m.run(context)
-    val (rightContext, rightValue) = cs(1).m.run(context)
-    (leftValue, rightValue) match {
-      case (Some(v), None) => {
-        val newRoot = root.take(true, leftContext.pc)
-        root.take(false, rightContext.pc)
-        (leftContext.copy(root = newRoot), Some(v))
-      }
-      case (None, Some(v)) => {
-        val newRoot = root.take(false, rightContext.pc)
-        root.take(true, leftContext.pc)
-        (rightContext.copy(root = newRoot), Some(v))
-      }
+    if (s.size == 2) {
+      // two branches, usually from if condition
+      val root = context.root
+      val cs = s.toList
+      val (leftContext, leftValue) = cs(0).m.run(context)
+      val (rightContext, rightValue) = cs(1).m.run(context)
+      (leftValue, rightValue) match {
+        case (Some(v), None) => {
+          val newRoot = root.take(true, leftContext.pc)
+          root.take(false, rightContext.pc)
+          (leftContext.copy(root = newRoot), Some(v))
+        }
+        case (None, Some(v)) => {
+          val newRoot = root.take(false, rightContext.pc)
+          root.take(true, leftContext.pc)
+          (rightContext.copy(root = newRoot), Some(v))
+        }
 
-      case (_, _) => throw new Exception("Non-determinism not allowed in concolic tester")
+        case (_, _) => throw new Exception("Non-determinism not allowed in concolic tester")
+      }
+    } else if (s.size > 2) {
+      throw new Exception("Non-determinism is not allowed in the concolic tester")
+    } else if (s.size == 1) {
+      // single path, determnistic
+      s.head.m.run(context)
+    } else {
+      // nothing to be deterministic about, this is a dead path
+      (context, None)
     }
   }
 
