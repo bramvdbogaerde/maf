@@ -22,6 +22,39 @@ import maf.language.scheme.interpreter.EmptyIO
 import maf.language.scheme.SchemeFuncall
 import maf.core.BasicEnvironment
 import maf.language.scheme.interpreter.ConcreteValues.AddrInfo
+import maf.core.Position
+
+case class PrimitiveNotFound(name: String) extends Exception {
+  override def getMessage(): String =
+    s"Primitive $name not found"
+}
+
+object ScConcretePrimitives {
+  import ConcreteValues._
+  import scala.collection.immutable.Nil
+
+  object `true?` extends SimplePrim {
+
+    override val name: String = "true?"
+
+    override def call(args: List[ConcreteValues.Value], position: Position.Position): ConcreteValues.Value = args match {
+      case Value.Bool(false) :: Nil            => Value.Bool(false)
+      case _ :: scala.collection.immutable.Nil => Value.Bool(true)
+      case _                                   => throw new Exception(s"$name: invalid number of arguments, expected 1 got ${args.size}")
+    }
+  }
+
+  object `false?` extends SimplePrim {
+
+    override val name: String = "false?"
+
+    override def call(args: List[ConcreteValues.Value], position: Position.Position): ConcreteValues.Value = args match {
+      case Value.Bool(false) :: Nil            => Value.Bool(true)
+      case _ :: scala.collection.immutable.Nil => Value.Bool(false)
+      case _                                   => throw new Exception(s"$name: invalid number of arguments, expected 1 got ${args.size}")
+    }
+  }
+}
 
 trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnalysis {
   import ScConcreteValues._
@@ -93,10 +126,16 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
     override val io: IO = new EmptyIO()
   }
 
+  import ScConcretePrimitives._
   private def interop = new MonadicSchemeInterpreter(ConcolicStore(Map()))
-  override def primMap(v: String): Prim = interop.Primitives.allPrimitives(v)
+  private lazy val allPrimitives =
+    (interop.Primitives.allPrimitives.map(_._2) ++ List(`true?`, `false?`)).map(p => (p.name, p)).toMap
 
-  override def primitives: List[String] = interop.Primitives.allPrimitives.map(_._1).toList
+  override def primMap(v: String): Prim =
+    allPrimitives.get(v).getOrElse(throw PrimitiveNotFound(v))
+
+  override def primitives: List[String] =
+    allPrimitives.map(_._1).toList
 
   override def primName(p: Prim): String = p.name
 
@@ -185,6 +224,10 @@ abstract class ConcolicTesting(exp: ScExp) extends ConcolicAnalysisSemantics {
   }
 
   def analyze(): Unit = analyzeWithTimeout(Timeout.none)
+  def analyzeOnce(): Value = {
+    analyze()
+    _results(0)
+  }
 
   /**
    * Checks whether the given path condition is satisfiable, and

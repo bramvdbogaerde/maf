@@ -1,8 +1,8 @@
 package maf.test.language.contracts
 
 import maf.language.contracts._
-import maf.language.sexp.{ValueBoolean, ValueInteger}
 import org.scalatest.flatspec.AnyFlatSpec
+import maf.language.sexp.Value
 import org.scalatest.matchers.should
 
 class ScParserTest extends AnyFlatSpec with should.Matchers {
@@ -10,12 +10,12 @@ class ScParserTest extends AnyFlatSpec with should.Matchers {
     SCExpCompiler.read(exp)
 
   "A number" should "parse to an ScValue" in {
-    compile("1") should matchPattern { case ScValue(ValueInteger(1), _) => }
+    compile("1") should matchPattern { case ScValue(Value.Integer(i), _) if i == 1 => }
   }
 
   "A boolean" should "parse to an ScValue" in {
-    compile("#t") should matchPattern { case ScValue(ValueBoolean(true), _) => }
-    compile("#f") should matchPattern { case ScValue(ValueBoolean(false), _) => }
+    compile("#t") should matchPattern { case ScValue(Value.Boolean(true), _) => }
+    compile("#f") should matchPattern { case ScValue(Value.Boolean(false), _) => }
   }
 
   "An identifier" should "parse to a ScIdentifier" in {
@@ -62,7 +62,8 @@ class ScParserTest extends AnyFlatSpec with should.Matchers {
   }
 
   "A set!" should "parse to a ScSet" in {
-    compile("(set! x 10)") should matchPattern { case ScSet(ScIdentifier("x", _), ScValue(ValueInteger(10), _), _) =>
+    compile("(set! x 10)") should matchPattern {
+      case ScSet(ScIdentifier("x", _), ScValue(Value.Integer(i), _), _) if i == 10 =>
     }
   }
 

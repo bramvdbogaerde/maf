@@ -3,9 +3,13 @@ package maf.test
 import maf.core.Address
 import maf.language.contracts.ScLattice.Blame
 import maf.language.contracts._
-import maf.modular.contracts.{ScCallInsensitivity, ScConstantPropagationDomain, ScSmtSolver, SimpleScSemantics}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should
+import maf.modular.contracts.analyses.ScCallInsensitivity
+import maf.modular.contracts.analyses.SimpleScSemantics
+import maf.modular.contracts.domain.ScConstantPropagationDomain
+import maf.modular.contracts.ScSmtSolver
+import maf.modular.contracts.domain.ScSchemeConstantPropagationDomain
 
 trait ScTests extends AnyFlatSpec with should.Matchers {
   trait ScLatticeFixture {
@@ -19,7 +23,7 @@ trait ScTests extends AnyFlatSpec with should.Matchers {
     def n[V, A <: Address](v: Int)(implicit lattice: ScLattice[V, A]): V = lattice.injectInteger(v)
   }
 
-  class ScTestAnalysis(prg: ScExp) extends SimpleScSemantics(prg) with ScCallInsensitivity with ScConstantPropagationDomain {
+  class ScTestAnalysis(prg: ScExp) extends SimpleScSemantics(prg) with ScCallInsensitivity with ScSchemeConstantPropagationDomain {
 
     val GLOBAL_STORE_ENABLED = false
 
