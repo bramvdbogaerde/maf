@@ -175,6 +175,12 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
   } >> withEnv { env => pure(env.lookup(identifier.name).get) }
 
   /**
+   * The evaluation of opaque values differs from the regular evaluation, as in this
+   * case an oracle needs to be consulted that is used to generate an initial set of values
+   */
+  override def evalOpaque(refinements: Set[String]): ScEvalM[PostValue] = ???
+
+  /**
    * Solves the given path condition and returns true if it is satisfiable, as we only work with concrete values
    * in concolic testing, there is no need to check the path conditions at runtime, hence, we only check them when
    * we explore the state space
@@ -188,6 +194,7 @@ abstract class ConcolicTesting(exp: ScExp) extends ConcolicAnalysisSemantics {
   import ConcreteValues.Value
 
   private var _results: List[Value] = List()
+  private val root: ConcTree = ConcTree.root
   def results: List[Value] = _results
 
   /**
@@ -211,14 +218,12 @@ abstract class ConcolicTesting(exp: ScExp) extends ConcolicAnalysisSemantics {
    * root element.
    */
   private def initialContext(
-      root: Option[ConcTree] = None,
-      pc: Option[PC] = None
     ): ConcolicContext =
     ConcolicContext(
       env = initialEnv,
       store = initialConcolicStore,
       pc = ScNil(),
-      root = ConcTree.root
+      root = root
     )
 
   def analyzeWithTimeout(timeout: Timeout.T): Unit = {

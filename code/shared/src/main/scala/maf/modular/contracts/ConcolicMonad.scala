@@ -85,6 +85,7 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
       store: ConcolicStore,
       pc: ScExp,
       root: ConcTree,
+      oracle: ConcolicOracle,
       ignoredIdentities: Set[Identity] = Set())
 
   case class ConcolicMonad[X](run: ConcolicContext => (ConcolicContext, Option[X]))
@@ -180,8 +181,6 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
           throw new Exception("at least one path should be possible")
 
         case (_, _) =>
-          println(leftValue)
-          println(rightValue)
           throw new Exception("Non-determinism not allowed in concolic tester")
       }
     } else if (s.size > 2) {
