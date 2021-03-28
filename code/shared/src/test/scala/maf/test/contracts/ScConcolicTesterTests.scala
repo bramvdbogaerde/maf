@@ -6,14 +6,34 @@ import maf.modular.contracts.ConcolicTesting
 import maf.language.contracts.ScExp
 import maf.language.scheme.interpreter.ConcreteValues
 import maf.language.contracts.SCExpCompiler
+import maf.concolic.contracts.Oracle
+import maf.language.scheme.interpreter.ConcreteValues.Value
 
 trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
   def createAnalysis(exp: ScExp): ConcolicTesting
-  def analyze(program: String, expected: ConcreteValues.Value): Unit = {
+
+  protected def withFixture(f: => Unit): Unit = {
+    // seed the oracle so that the tests are predictable
+    Oracle.reseed(0)
+    // run the actual test
+    f
+  }
+
+  protected def runAnalysis(program: String): Value = {
+    val exp = SCExpCompiler.read(program)
+    val analysis = createAnalysis(exp)
+    analysis.analyzeOnce()
+  }
+
+  protected def analyze(program: String, expected: ConcreteValues.Value): Unit = withFixture {
     program should s"evaluate to ${expected}" in {
-      val exp = SCExpCompiler.read(program)
-      val analysis = createAnalysis(exp)
-      analysis.analyzeOnce() shouldEqual expected
+      runAnalysis(program) shouldEqual expected
+    }
+  }
+
+  protected def analyzeMatches(program: String)(expected: PartialFunction[Any, _]): Unit = withFixture {
+    program should s"match pattern" in {
+      runAnalysis(program) should matchPattern(expected)
     }
   }
 
@@ -34,4 +54,10 @@ trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
   analyze("(define (f x) (if (= x 1) 1 0)) (f 1)", Integer(1))
   analyze("(define (f x) (if (= x 1) 1 0)) (f 0)", Integer(0))
   analyze("(define (fac x) (if (= x 0) 1 (* x (fac (- x 1))))) (fac 5)", Integer(120))
+  analyzeMatches("(OPQ boolean?)") { case Bool(_) => }
+  analyzeMatches("(OPQ number?)") { case Integer(_) => }
+  analyzeMatches("(OPQ string?)") { case Str(_) => }
+  analyzeMatches("(OPQ symbol?)") { case Symbol(_) => }
+  analyzeMatches("(OPQ char?)") { case Character(_) => }
+  analyzeMatches("(OPQ real?)") { case Real(_) => }
 }
