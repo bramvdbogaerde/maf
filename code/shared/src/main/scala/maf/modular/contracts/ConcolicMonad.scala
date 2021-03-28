@@ -8,12 +8,18 @@ import maf.language.contracts.ScNil
 import maf.core.Identity
 import maf.language.contracts.lattices.ScConcreteValues
 import maf.language.scheme.interpreter.ConcreteValues
+import maf.concolic.contracts.InputGenerator
 
 /** A tree structure to keep track of the space we need to explore. */
 trait ConcTree {
   val pc: ScExp
+  var symbolicVariables: List[String] = List()
   def unsat(branch: Boolean): Unit
   def take(branch: Boolean, pc: ScExp): ConcTree
+  def addSymbolicVariable(name: String): ConcTree = {
+    symbolicVariables = name :: symbolicVariables
+    this
+  }
 }
 
 object ConcTree {
@@ -39,6 +45,7 @@ case class TreeNode(
     } else {
       if (right != NilNode) right else { right = TreeNode(NilNode, NilNode, pc); right }
     }
+
 }
 
 /** A temporary placeholder node, only used during the concolic execution */
@@ -85,7 +92,7 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
       store: ConcolicStore,
       pc: ScExp,
       root: ConcTree,
-      oracle: ConcolicOracle,
+      inputGenerator: InputGenerator,
       ignoredIdentities: Set[Identity] = Set())
 
   case class ConcolicMonad[X](run: ConcolicContext => (ConcolicContext, Option[X]))
@@ -235,6 +242,14 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   /** Forcefully write to the store */
   def writeForce(addr: Addr, value: PostValue): ScEvalM[()] = write(addr, value)
 
+  def addSymbolicVariable(variable: String): ScEvalM[()] = ConcolicMonad { context =>
+    (context.copy(root = context.root.addSymbolicVariable(variable)), Some(()))
+  }
+
+  def withInputGenerator[A](f: InputGenerator => ScEvalM[A]): ScEvalM[A] = ConcolicMonad { context =>
+    f(context.inputGenerator).m.run(context)
+  }
+
   /** Run the given computation without any initial context */
   def run[A](c: ScEvalM[A]): A =
     c.m
@@ -243,7 +258,8 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
           env = BasicEnvironment(Map()),
           store = ConcolicStore(Map()),
           pc = ScNil(),
-          root = NilNode
+          root = NilNode,
+          inputGenerator = InputGenerator(Map())
         )
       )
       ._2

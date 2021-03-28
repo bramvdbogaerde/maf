@@ -23,6 +23,9 @@ import maf.language.scheme.SchemeFuncall
 import maf.core.BasicEnvironment
 import maf.language.scheme.interpreter.ConcreteValues.AddrInfo
 import maf.core.Position
+import maf.modular.contracts.semantics.ScModSemantics
+import maf.concolic.contracts.InputGenerator
+import maf.language.contracts.ScLattice.Opq
 
 case class PrimitiveNotFound(name: String) extends Exception {
   override def getMessage(): String =
@@ -178,7 +181,14 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
    * The evaluation of opaque values differs from the regular evaluation, as in this
    * case an oracle needs to be consulted that is used to generate an initial set of values
    */
-  override def evalOpaque(refinements: Set[String]): ScEvalM[PostValue] = ???
+  override def evalOpaque(refinements: Set[String]): ScEvalM[PostValue] = {
+    val symbolicVariable = ScModSemantics.genSym
+    addSymbolicVariable(symbolicVariable) >> withInputGenerator { generator =>
+      val id = ScIdentifier(symbolicVariable, Identity.none)
+      val value = generator.generate(Opq(refinements), id)
+      pure(PS(value, id))
+    }
+  }
 
   /**
    * Solves the given path condition and returns true if it is satisfiable, as we only work with concrete values
@@ -217,13 +227,13 @@ abstract class ConcolicTesting(exp: ScExp) extends ConcolicAnalysisSemantics {
    * Creates an initial context, starting from the given
    * root element.
    */
-  private def initialContext(
-    ): ConcolicContext =
+  private def initialContext(inputs: Map[String, Value] = Map()): ConcolicContext =
     ConcolicContext(
       env = initialEnv,
       store = initialConcolicStore,
       pc = ScNil(),
-      root = root
+      root = root,
+      inputGenerator = InputGenerator(Map())
     )
 
   def analyzeWithTimeout(timeout: Timeout.T): Unit = {
