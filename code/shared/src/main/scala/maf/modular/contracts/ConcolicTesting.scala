@@ -155,9 +155,12 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
   override def call(clo: ScLattice.Clo[ScConcreteValues.ScAddr], operands: List[PostValue]): ScEvalM[PostValue] = {
     val addresses = clo.parameters.map(p => allocator.allocVar(p))
     val names = clo.parameters.map(_.name)
-    local((_) => clo.env.extend(names.zip(addresses)).asInstanceOf[Env], {
-            sequence(addresses.zip(operands).map((write(_, _)).tupled)) >> eval(clo.lambda.body)
-          }
+    local(
+      (_) => clo.env.extend(names.zip(addresses)).asInstanceOf[Env], {
+        sequence(
+          addresses.zip(operands).map((write(_, _)).tupled)
+        ) >> eval(clo.lambda.body)
+      }
     )
   }
 

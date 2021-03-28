@@ -231,7 +231,7 @@ trait ScSharedSemantics extends ScSemantics {
       // The reason for this is that the value can be overwritten by a provide/contract,
       // in that case we would like to keep the contract if it points to the lambda,
       // otherwise we use a join.
-      v <- read(addr)
+      v <- readSafe(addr)
       _ <-
         if (lattice.isDefinitelyArrow(v.pure) && lattice.getArr(v.pure).size == 1) {
           // the address we try to write to contains a contract
@@ -590,8 +590,11 @@ trait ScSharedSemantics extends ScSemantics {
       c: => ScEvalM[X]
     ): ScEvalM[X] =
     withPc(feasible(op, value)).flatMap {
-      case Right(pc) => if (mustReplacePc) replacePc(pc)(c) else c
-      case Left(pc)  => if (mustReplacePc) replacePc(pc)(c) >> void else void
+      case Right(pc) =>
+        if (mustReplacePc) replacePc(pc)(c) else c
+
+      case Left(pc) =>
+        if (mustReplacePc) replacePc(pc)(void) else void
     }
 
   def guardFeasible(op: Prim, value: PostValue): ScEvalM[()] = ifFeasible(op, value)(pure(()))
@@ -610,7 +613,8 @@ trait ScSharedSemantics extends ScSemantics {
       case _ if !lattice.schemeLattice.isTrue(run(callPrimitive(PrimitiveOperator(op, ScNil()), Argument(value, ScNil())).map(_.pure))) =>
         Left(newPc)
 
-      case ScNil(_) => Left(newPc)
+      case ScNil(_) =>
+        Right(newPc)
       case _ =>
         if (solve(newPc)) Right(newPc) else Left(newPc)
     }

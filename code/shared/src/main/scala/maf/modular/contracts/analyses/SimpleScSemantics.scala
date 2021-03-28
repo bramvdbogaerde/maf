@@ -238,6 +238,8 @@ abstract class SimpleScSemantics(prg: ScExp)
       /** Removes the given addresses from the store */
       override def evict(addresses: List[SimpleScSemantics.this.Addr]): ScEvalM[Unit] = ???
 
+      override def readSafe(addr: Addr): ScEvalM[PostValue] = ???
+
       /**
        * Writes the given value to the given address
        *

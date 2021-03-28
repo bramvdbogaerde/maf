@@ -175,10 +175,17 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
           (rightContext.copy(root = newRoot), Some(v))
         }
 
-        case (_, _) => throw new Exception("Non-determinism not allowed in concolic tester")
+        case (None, None) =>
+          // no path was possible
+          throw new Exception("at least one path should be possible")
+
+        case (_, _) =>
+          println(leftValue)
+          println(rightValue)
+          throw new Exception("Non-determinism not allowed in concolic tester")
       }
     } else if (s.size > 2) {
-      throw new Exception("Non-determinism is not allowed in the concolic tester")
+      throw new Exception("Non-determinism is not allowed in the concolic tester (size > 2)")
     } else if (s.size == 1) {
       // single path, determnistic
       s.head.m.run(context)
@@ -217,6 +224,13 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
 
   override def write(addr: Addr, value: PostValue): ScEvalM[()] = modifyStoreCache { cache =>
     cache.update(addr, value).asInstanceOf[StoreCache]
+  }
+
+  override def readSafe(addr: Addr): ScEvalM[PostValue] = withStoreCache { cache =>
+    cache.lookup(addr) match {
+      case Some(v) => pure(v)
+      case None    => result(ConcreteValues.Value.Nil)
+    }
   }
 
   /** Forcefully write to the store */

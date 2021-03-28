@@ -468,8 +468,9 @@ trait ScBigStepSemantics extends ScModSemantics with ScPrimitives with ScSemanti
         condition: ScExp,
         consequent: ScExp,
         alternative: ScExp
-      ): ScEvalM[PostValue] =
+      ): ScEvalM[PostValue] = {
       eval(condition).flatMap((value) => conditional(value, condition, consequent, alternative))
+    }
 
     def allocList(values: List[PostValue], idns: List[Identity]): ScEvalM[PostValue] = values match {
       case List() => result(lattice.injectNil)

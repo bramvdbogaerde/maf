@@ -321,6 +321,13 @@ trait ScAbstractSemanticsMonadAnalysis {
   }
 
   /**
+   * Same as `read` but ensures that it does not result
+   * in an exception in strict analyses that requires
+   * values to be defined in the store before they are used.
+   */
+  def readSafe(addr: Addr): ScEvalM[PostValue]
+
+  /**
    * Writes the given value to the given address
    *
    * @param addr the address to write the value to
