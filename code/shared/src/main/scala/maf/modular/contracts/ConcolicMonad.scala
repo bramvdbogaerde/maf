@@ -68,7 +68,7 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   override def modifyPC(f: PC => PC): ScEvalM[()] = ConcolicMonad { context =>
     val newPc = f(context.pc)
     // TODO: remove redundant pc variable in the state
-    (context.copy(pc = newPc, root = context.root.modifyPc(newPc)), Some(()))
+    (context.copy(pc = newPc), Some(()))
   }
 
   override def modifyEnv(f: Env => Env): ScEvalM[()] = ConcolicMonad { context =>
@@ -96,27 +96,57 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
       v: Option[Boolean]
     ): ScEvalM[X] = nondets(Set(t, f))
 
+  /**
+   * Creates a new root given the new left and right branches.
+   * If it detects that the new branches are incosistent with the current root,
+   * then it fails
+   */
+  protected def branches(
+      root: ConcTree,
+      left: ConcTree,
+      right: ConcTree,
+      pc: PC
+    ): ConcTree = root match {
+    case TreeNode(oldLeft, oldRight, pc) =>
+      val newLeft = oldLeft match {
+        case UnexploredNode(_) | _ if oldLeft.pc == left.pc => left
+        case _                                              =>
+          // current left is not unexplored, and it also didn't adhere
+          // to the current tree structure, which means that we have found a bug
+          throw new Exception("Inconsistent tree")
+      }
+
+      val newRight = oldRight match {
+        case UnexploredNode(_) | _ if oldRight.pc == right.pc => right
+        case _                                                =>
+          // current right is not unexplored, and it also didn't adhere
+          // to the current tree structure, which means that we have found a bug
+          throw new Exception("Incosistent tree")
+      }
+
+      TreeNode(newLeft, newRight, pc)
+    case UnexploredNode(_) => TreeNode(left, right, pc)
+    case _                 => throw new Exception("Incosistent tree")
+  }
+
   override def nondets[X](s: Set[ScEvalM[X]]): ScEvalM[X] = ConcolicMonad { context =>
     if (s.size == 2) {
       // two branches, usually from if condition
       val cs = s.toList
       val (leftContext, leftValue) = cs(0).m.run(context)
       val (rightContext, rightValue) = cs(1).m.run(context)
+
+      val leftTree = leftContext.root.modifyPc(pc = leftContext.pc)
+      val rightTree = rightContext.root.modifyPc(pc = rightContext.pc)
+      val newRoot = branches(context.root, leftTree, rightTree, context.pc)
+
       (leftValue, rightValue) match {
         case (Some(v), None) =>
-          val rightTree = rightContext.root
-
-          val newRoot = TreeNode(leftContext.root, rightTree, context.root.pc)
           (leftContext.copy(root = newRoot, trail = true :: leftContext.trail), Some(v))
         case (None, Some(v)) =>
-          val leftTree = leftContext.root
-          val newRoot = TreeNode(leftTree, rightContext.root, context.root.pc)
           (rightContext.copy(root = newRoot, trail = false :: rightContext.trail), Some(v))
 
         case (None, None) =>
-          val leftTree = leftContext.root
-          val rightTree = rightContext.root
-          val newRoot = TreeNode(leftTree, rightTree, context.root.pc)
           (context.copy(root = newRoot), None)
 
         case (_, _) =>

@@ -271,8 +271,9 @@ abstract class ConcolicTesting(exp: ScExp, var maxdepth: Int = 100) extends Conc
     } else {
       finalContext.root
     }
-    println(finalContext.trail)
+
     println(root)
+
     // keep track of the results
     _results = value.get.pure :: _results
     _results.head
