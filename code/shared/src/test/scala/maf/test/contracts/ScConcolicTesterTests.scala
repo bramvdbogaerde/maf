@@ -60,4 +60,5 @@ trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
   analyzeMatches("(OPQ symbol?)") { case Symbol(_) => }
   analyzeMatches("(OPQ char?)") { case Character(_) => }
   analyzeMatches("(OPQ real?)") { case Real(_) => }
+  //analyze("(define (fac x) (if (<= x 0) 1 (* x (fac (- x 1))))) (fac (OPQ number?))", Integer(120))
 }

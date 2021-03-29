@@ -26,6 +26,9 @@ import maf.core.Position
 import maf.modular.contracts.semantics.ScModSemantics
 import maf.concolic.contracts.InputGenerator
 import maf.language.contracts.ScLattice.Opq
+import maf.language.contracts.ScFunctionAp
+import maf.concolic.contracts.ConcTree
+import maf.concolic.contracts.ValueNode
 
 case class PrimitiveNotFound(name: String) extends Exception {
   override def getMessage(): String =
@@ -153,7 +156,7 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
     }
     // propagate its changes the primitive made back to our monadic store
     _ <- modifyStoreCache { store => store.copy(map = store.map ++ interop.lstore.map) }
-  } yield PS(result, ScNil()) // TODO: return a valid post value after applying the primitive
+  } yield PS(result, ScFunctionAp.primitive(p.f.name, args.map(_.v.symbolic), Identity.none))
 
   override def call(clo: ScLattice.Clo[ScConcreteValues.ScAddr], operands: List[PostValue]): ScEvalM[PostValue] = {
     val addresses = clo.parameters.map(p => allocator.allocVar(p))
@@ -199,13 +202,31 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
 
 }
 
-/** A convience class to easily instantiate a concolic analysis */
-abstract class ConcolicTesting(exp: ScExp) extends ConcolicAnalysisSemantics {
+/**
+ *  A convience class to easily instantiate a concolic analysis
+ *
+ *  @param exp the expression to concolically test
+ *  @param maxdepth (optional) the maximum depth of recursion we allow to be used.
+ *  It does not result in an error when this maximal depth is reached, rather it records
+ *  a stackoverflow error in the exploration tree, and continues the analysis.
+ */
+abstract class ConcolicTesting(exp: ScExp, var maxdepth: Int = 100) extends ConcolicAnalysisSemantics {
   import ConcreteValues.Value
 
   private var _results: List[Value] = List()
-  private val root: ConcTree = ConcTree.root
+  private val root: maf.concolic.contracts.ConcTree = maf.concolic.contracts.ConcTree.empty
   def results: List[Value] = _results
+
+  /** Overrides the original `call` to take the maximum recursion depth into account */
+  override def call(clo: ScLattice.Clo[ScConcreteValues.ScAddr], operands: List[PS]): ScEvalM[PS] = unit.flatMap(_ => {
+    if (maxdepth > 0) {
+      maxdepth = maxdepth - 1
+      super.call(clo, operands)
+    } else {
+      println("stack too deep")
+      modifyConcTree(ConcTree.stackoverflow) >> void
+    }
+  })
 
   /**
    * Creates an initial environment with all the necessary primitives
@@ -237,15 +258,27 @@ abstract class ConcolicTesting(exp: ScExp) extends ConcolicAnalysisSemantics {
     )
 
   def analyzeWithTimeout(timeout: Timeout.T): Unit = {
-    val (_, value) = eval(exp).m.run(initialContext())
-    _results = value.get.pure :: _results
+    analyzeOnce()
   }
 
   def analyze(): Unit = analyzeWithTimeout(Timeout.none)
-  def analyzeOnce(): Value = {
-    analyze()
-    _results(0)
+  def analyzeOnce(context: ConcolicContext = initialContext()): Value = {
+    // evaluate the expression in the given context
+    val (finalContext, value) = eval(exp).m.run(context)
+    // set the final node to a value node
+    val root = if (value.isDefined) {
+      finalContext.root.replaceAt(finalContext.trail, ConcTree.value(value.get.pure))
+    } else {
+      finalContext.root
+    }
+    println(finalContext.trail)
+    println(root)
+    // keep track of the results
+    _results = value.get.pure :: _results
+    _results.head
   }
+
+  override def evaluatedValue(value: PostValue): ScEvalM[PostValue] = modifyConcTree(pc => ValueNode(value.pure, pc)) >> pure(value)
 
   /**
    * Checks whether the given path condition is satisfiable, and

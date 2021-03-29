@@ -272,7 +272,7 @@ object ScFunctionAp {
       arguments: List[ScExp],
       idn: Identity
     ): ScFunctionAp = {
-    ScFunctionAp(ScIdentifier("cons", idn), arguments, idn)
+    ScFunctionAp(ScIdentifier(name, idn), arguments, idn)
   }
 }
 

@@ -252,6 +252,8 @@ abstract class SimpleScSemantics(prg: ScExp)
       /** Forcefully write to the store */
       override def writeForce(addr: SimpleScSemantics.this.Addr, value: PS): ScEvalM[Unit] = ???
 
+      override def evaluatedValue(value: PostValue): ScEvalM[PostValue] = pure(value)
+
       /** Run the given computation without any initial context */
       override def run[A](c: ScEvalM[A]): A = ???
     }

@@ -4,82 +4,11 @@ import maf.modular.contracts.semantics._
 import maf.language.contracts.ScExp
 import maf.core.Store
 import maf.core.BasicEnvironment
-import maf.language.contracts.ScNil
 import maf.core.Identity
 import maf.language.contracts.lattices.ScConcreteValues
 import maf.language.scheme.interpreter.ConcreteValues
-import maf.concolic.contracts.InputGenerator
-
-/** A tree structure to keep track of the space we need to explore. */
-trait ConcTree {
-  val pc: ScExp
-  var symbolicVariables: List[String] = List()
-  def unsat(branch: Boolean): Unit
-  def take(branch: Boolean, pc: ScExp): ConcTree
-  def addSymbolicVariable(name: String): ConcTree = {
-    symbolicVariables = name :: symbolicVariables
-    this
-  }
-}
-
-object ConcTree {
-  def root: ConcTree = TreeNode(
-    left = NilNode,
-    right = NilNode,
-    pc = ScNil()
-  )
-}
-
-case class TreeNode(
-    var left: ConcTree,
-    var right: ConcTree,
-    pc: ScExp)
-    extends ConcTree {
-
-  /** Marks either the left or right branch as unsatisfiable */
-  def unsat(branch: Boolean): Unit = if (branch) left = UnsatNode(left.pc) else right = UnsatNode(right.pc)
-
-  def take(branch: Boolean, pc: ScExp): ConcTree =
-    if (branch) {
-      if (left != NilNode) left else { left = TreeNode(NilNode, NilNode, pc); left }
-    } else {
-      if (right != NilNode) right else { right = TreeNode(NilNode, NilNode, pc); right }
-    }
-
-}
-
-/** A temporary placeholder node, only used during the concolic execution */
-case object NilNode extends ConcTree {
-  def unsat(branch: Boolean): Unit = throw new Exception("Cannot mark nil node as unsatisfiable")
-  def take(branch: Boolean, pc: ScExp): ConcTree = throw new Exception(s"Cannot take branch on ${this.getClass}")
-  val pc: ScExp = ScNil()
-}
-
-/** A node that was discovered during execution but whose subtree is not yet explored by the analysis */
-case class UnexploredNode(pc: ScExp) extends ConcTree {
-  def unsat(branch: Boolean): Unit = throw new Exception("Cannot mark an unexplored node as unsatisfiable")
-  def take(branch: Boolean, pc: ScExp): ConcTree = throw new Exception(s"Cannot take branch on ${this.getClass}")
-}
-
-/** A node that was proven to be unreachable at runtime (using the constraints discovered during the analysis) */
-case class UnsatNode(pc: ScExp) extends ConcTree {
-  def unsat(branch: Boolean): Unit = throw new Exception("Node already marked unsatisfiable")
-  def take(branch: Boolean, pc: ScExp): ConcTree = throw new Exception(s"Cannot take branch on ${this.getClass}")
-}
-
-/** The execution resulted in an error in this node */
-case class ErrorNode(error: String, pc: ScExp) extends ConcTree {
-  def unsat(branch: Boolean): Unit = throw new Exception("Cannot mark an error node as unsatisfiable")
-  def take(branch: Boolean, pc: ScExp): ConcTree = throw new Exception(s"Cannot take branch on ${this.getClass}")
-}
-
-/** The execution resulted in a value in this node */
-case class ValueNode(value: ScConcreteValues.ScValue, pc: ScExp) extends ConcTree {
-  def unsat(branch: Boolean): Unit = throw new Exception("Cannot mark an branch node as unsatisfiable")
-  def take(branch: Boolean, pc: ScExp): ConcTree =
-    throw new Exception("cannot take a branch on a value node")
-
-}
+import maf.concolic.contracts._
+import maf.language.contracts.ScNil
 
 trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   case class ConcolicStore(map: Map[Addr, PostValue]) extends Store[Addr, PostValue] {
@@ -93,6 +22,7 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
       pc: ScExp,
       root: ConcTree,
       inputGenerator: InputGenerator,
+      trail: List[Boolean] = List(),
       ignoredIdentities: Set[Identity] = Set())
 
   case class ConcolicMonad[X](run: ConcolicContext => (ConcolicContext, Option[X]))
@@ -136,7 +66,9 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   override type Addr = ScConcreteValues.ScAddr
 
   override def modifyPC(f: PC => PC): ScEvalM[()] = ConcolicMonad { context =>
-    (context.copy(pc = f(context.pc)), Some(()))
+    val newPc = f(context.pc)
+    // TODO: remove redundant pc variable in the state
+    (context.copy(pc = newPc, root = context.root.modifyPc(newPc)), Some(()))
   }
 
   override def modifyEnv(f: Env => Env): ScEvalM[()] = ConcolicMonad { context =>
@@ -167,25 +99,25 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   override def nondets[X](s: Set[ScEvalM[X]]): ScEvalM[X] = ConcolicMonad { context =>
     if (s.size == 2) {
       // two branches, usually from if condition
-      val root = context.root
       val cs = s.toList
       val (leftContext, leftValue) = cs(0).m.run(context)
       val (rightContext, rightValue) = cs(1).m.run(context)
       (leftValue, rightValue) match {
-        case (Some(v), None) => {
-          val newRoot = root.take(true, leftContext.pc)
-          root.take(false, rightContext.pc)
-          (leftContext.copy(root = newRoot), Some(v))
-        }
-        case (None, Some(v)) => {
-          val newRoot = root.take(false, rightContext.pc)
-          root.take(true, leftContext.pc)
-          (rightContext.copy(root = newRoot), Some(v))
-        }
+        case (Some(v), None) =>
+          val rightTree = rightContext.root
+
+          val newRoot = TreeNode(leftContext.root, rightTree, context.root.pc)
+          (leftContext.copy(root = newRoot, trail = true :: leftContext.trail), Some(v))
+        case (None, Some(v)) =>
+          val leftTree = leftContext.root
+          val newRoot = TreeNode(leftTree, rightContext.root, context.root.pc)
+          (rightContext.copy(root = newRoot, trail = false :: rightContext.trail), Some(v))
 
         case (None, None) =>
-          // no path was possible
-          throw new Exception("at least one path should be possible")
+          val leftTree = leftContext.root
+          val rightTree = rightContext.root
+          val newRoot = TreeNode(leftTree, rightTree, context.root.pc)
+          (context.copy(root = newRoot), None)
 
         case (_, _) =>
           throw new Exception("Non-determinism not allowed in concolic tester")
@@ -242,12 +174,19 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   /** Forcefully write to the store */
   def writeForce(addr: Addr, value: PostValue): ScEvalM[()] = write(addr, value)
 
-  def addSymbolicVariable(variable: String): ScEvalM[()] = ConcolicMonad { context =>
-    (context.copy(root = context.root.addSymbolicVariable(variable)), Some(()))
-  }
+  def addSymbolicVariable(variable: String): ScEvalM[()] = unit // TODO
 
   def withInputGenerator[A](f: InputGenerator => ScEvalM[A]): ScEvalM[A] = ConcolicMonad { context =>
     f(context.inputGenerator).m.run(context)
+  }
+
+  def modifyConcTree[A](f: PC => ConcTree): ScEvalM[()] = ConcolicMonad { context =>
+    // only allow modification when we are replacing an unexplored node
+    val newRoot = context.root match {
+      case _: UnexploredNode => f(context.root.pc)
+      case _                 => context.root
+    }
+    (context.copy(root = newRoot), Some(()))
   }
 
   /** Run the given computation without any initial context */

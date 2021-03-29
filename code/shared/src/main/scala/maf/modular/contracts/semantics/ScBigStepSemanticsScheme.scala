@@ -109,6 +109,12 @@ trait ScSemantics extends ScAbstractSemanticsMonadAnalysis {
   }
 
   /**
+   * Auxilary function which serves as a way to identify
+   * fully evaluated values used by the intepreter
+   */
+  def evaluatedValue(v: PostValue): ScEvalM[PostValue]
+
+  /**
    * Returns true if the given path condition is satisfiable
    *
    * @param pc the path condition to solve for
@@ -126,7 +132,7 @@ trait ScSharedSemantics extends ScSemantics {
   private lazy val primCdr = primMap("cdr")
 
   private var totalRuns = 0
-  def eval(expr: ScExp): ScEvalM[PostValue] = expr match {
+  def eval(expr: ScExp): ScEvalM[PostValue] = (expr match {
     case ScBegin(expressions, _)                              => evalSequence(expressions)
     case ScIf(condition, consequent, alternative, _)          => evalIf(condition, consequent, alternative)
     case ScLetRec(idents, bindings, body, _)                  => evalLetRec(idents, bindings, body)
@@ -152,7 +158,7 @@ trait ScSharedSemantics extends ScSemantics {
     case exp @ ScCar(pai, _)                         => evalCar(pai, exp)
     case exp @ ScCdr(pai, _)                         => evalCdr(pai, exp)
     case ScNil(_)                                    => result(lattice.schemeLattice.nil)
-  }
+  })
 
   def blame[X](blamedIdentity: Identity, blamingIdentity: Identity = Identity.none): ScEvalM[X] =
     withIgnoredIdentities { ignored =>
