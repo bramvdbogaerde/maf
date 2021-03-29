@@ -29,6 +29,7 @@ import maf.language.contracts.ScLattice.Opq
 import maf.language.contracts.ScFunctionAp
 import maf.concolic.contracts.ConcTree
 import maf.concolic.contracts.ValueNode
+import maf.concolic.contracts.Nearest
 
 case class PrimitiveNotFound(name: String) extends Exception {
   override def getMessage(): String =
@@ -273,6 +274,7 @@ abstract class ConcolicTesting(exp: ScExp, var maxdepth: Int = 100) extends Conc
     }
 
     println(root)
+    println(Nearest.next(root, finalContext.trail))
 
     // keep track of the results
     _results = value.get.pure :: _results

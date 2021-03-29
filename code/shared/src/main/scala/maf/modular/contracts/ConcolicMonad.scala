@@ -109,16 +109,18 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
     ): ConcTree = root match {
     case TreeNode(oldLeft, oldRight, pc) =>
       val newLeft = oldLeft match {
-        case UnexploredNode(_) | _ if oldLeft.pc == left.pc => left
-        case _                                              =>
+        case UnexploredNode(_)          => left
+        case _ if oldLeft.pc == left.pc => oldLeft
+        case _                          =>
           // current left is not unexplored, and it also didn't adhere
           // to the current tree structure, which means that we have found a bug
           throw new Exception("Inconsistent tree")
       }
 
       val newRight = oldRight match {
-        case UnexploredNode(_) | _ if oldRight.pc == right.pc => right
-        case _                                                =>
+        case UnexploredNode(_)            => oldLeft
+        case _ if oldRight.pc == right.pc => right
+        case _                            =>
           // current right is not unexplored, and it also didn't adhere
           // to the current tree structure, which means that we have found a bug
           throw new Exception("Incosistent tree")

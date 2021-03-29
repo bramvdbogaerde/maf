@@ -8,6 +8,7 @@ sealed trait ConcTree {
   val pc: ScExp
   def modifyPc(pc: ScExp): ConcTree
   def replaceAt(trail: List[Boolean], t: ConcTree): ConcTree
+  def followTrail(trail: List[Boolean]): ConcTree
   def isLeaf: Boolean
 }
 
@@ -16,6 +17,10 @@ sealed trait LeafNode extends ConcTree {
   def replaceAt(trail: List[Boolean], t: ConcTree): ConcTree =
     if (trail.size > 0) { throw new Exception("at leaf node but trail is not empty") }
     else { t.modifyPc(pc) }
+
+  def followTrail(trail: List[Boolean]): ConcTree =
+    if (trail.size > 0) { throw new Exception("at leaf node but trail is not empty") }
+    else { this }
 }
 
 case class ErrorNode(error: String, pc: ScExp) extends LeafNode {
@@ -36,6 +41,14 @@ case class TreeNode(
       this.copy(left = left.replaceAt(trail.tail, t))
     } else {
       this.copy(right = right.replaceAt(trail.tail, t))
+    }
+
+  def followTrail(trail: List[Boolean]): ConcTree =
+    if (trail.isEmpty) { throw new Exception("not a leaf node but trail is empty") }
+    else if (trail.head) {
+      left.followTrail(trail.tail)
+    } else {
+      right.followTrail(trail.tail)
     }
 }
 
