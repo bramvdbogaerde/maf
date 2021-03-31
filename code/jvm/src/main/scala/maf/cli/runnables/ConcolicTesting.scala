@@ -8,7 +8,8 @@ object ConcolicTesting {
 
     override def eval(sc: ScExp): Any = {
       val analysis = new maf.modular.contracts.ConcolicTesting(sc) {
-        override def isSat(exp: ScExp): List[ConcreteValues.Value] = ???
+
+        def isSat(exp: ScExp): Option[Map[String, Val]] = ???
       }
 
       analysis.analyze()

@@ -229,7 +229,8 @@ trait ScAbstractSemanticsMonadAnalysis {
    * Returns a computation that looks up the given identifier in the current"
    * environment and returns its associated address
    */
-  def lookup(identifier: String): ScEvalM[Addr] = withEnv(env => pure(env.lookup(identifier).get))
+  def lookup(identifier: String): ScEvalM[Addr] =
+    withEnv(env => pure(env.lookup(identifier).getOrElse(throw new Exception(s"variable $identifier not found"))))
 
   // TODO: this is actually something that belongs elsewhere, maybe in the main analysis,
   // we don't want to know about allocations and components here

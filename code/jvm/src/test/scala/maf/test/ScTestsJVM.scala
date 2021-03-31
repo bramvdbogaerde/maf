@@ -7,7 +7,7 @@ import maf.test.contracts.{ScTestGlobalStore, ScTestLocalStore}
 
 trait ScTestsJVM extends ScTests with ScAnalysisTests {
   trait ScTestAnalysisJVM extends ScTestAnalysis {
-    override def newSmtSolver(program: PC): ScSMTSolverJVM =
+    override def newSmtSolver(program: PC): ScSMTSolverJVM[Nothing] =
       new ScSMTSolverJVM(program, primitivesMap)
   }
 
@@ -15,10 +15,7 @@ trait ScTestsJVM extends ScTests with ScAnalysisTests {
 }
 
 trait ScTestsJVMLocalStore extends ScTestsJVM with ScTestLocalStore {
-  class ScTestsJVMLocalStore(prg: ScExp)
-      extends ScTestAnalysis(prg)
-      with ScTestAnalysisJVM
-      with ScTestAnalysisLocalStore
+  class ScTestsJVMLocalStore(prg: ScExp) extends ScTestAnalysis(prg) with ScTestAnalysisJVM with ScTestAnalysisLocalStore
 
   def newAnalysis(program: ScExp): ScTestsJVMLocalStore = {
     new ScTestsJVMLocalStore(program)
@@ -26,10 +23,7 @@ trait ScTestsJVMLocalStore extends ScTestsJVM with ScTestLocalStore {
 }
 
 trait ScTestsJVMGlobalStore extends ScTestsJVM with ScTestGlobalStore {
-  class ScTestsJVMGlobalStore(prg: ScExp)
-      extends ScTestAnalysis(prg)
-      with ScTestAnalysisJVM
-      with ScTestAnalysisGlobalStore
+  class ScTestsJVMGlobalStore(prg: ScExp) extends ScTestAnalysis(prg) with ScTestAnalysisJVM with ScTestAnalysisGlobalStore
 
   def newAnalysis(program: ScExp): ScTestsJVMGlobalStore = {
     new ScTestsJVMGlobalStore(program)

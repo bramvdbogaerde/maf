@@ -2,6 +2,7 @@ package maf.modular.contracts
 
 import maf.language.contracts.{ScExp, ScFunctionAp, ScIdentifier, ScNil, ScValue}
 import maf.language.sexp.Value
+import maf.language.scheme.interpreter.ConcreteValues
 
 /**
  * Transforms a condition built using basic predicates from the soft contract language
@@ -9,7 +10,11 @@ import maf.language.sexp.Value
  * @param condition the condition which must be checked
  * @param primitives: a map of primitives to names in Z3
  */
-class ScSMTSolverJVM(condition: ScExp, primitives: Map[String, String] = Map()) extends ScSmtSolver {
+class ScSMTSolverJVM[V](
+    condition: ScExp,
+    primitives: Map[String, String] = Map(),
+    injectValue: ConcreteValues.Value => Option[V] = ((_: ConcreteValues.Value) => None))
+    extends ScSmtSolver {
 
   val DEBUG_MODE = false
 
@@ -17,7 +22,7 @@ class ScSMTSolverJVM(condition: ScExp, primitives: Map[String, String] = Map()) 
   import ScSMTSolverJVM._
   import maf.util.MonoidInstances._
 
-  private var variables: List[String] = List()
+  private var variables: Set[String] = Set()
 
   object ScAnd {
     def unapply(exp: ScExp): Option[(ScExp, ScExp)] = exp match {
@@ -26,7 +31,11 @@ class ScSMTSolverJVM(condition: ScExp, primitives: Map[String, String] = Map()) 
     }
   }
 
-  private val prelude: String =
+  // create a new context and solver
+  private val context = new Context()
+  private lazy val solver = context.mkSolver()
+
+  private val datasort: String =
     """
   (declare-datatypes ()
     ((V (VInt  (unwrap-int Int))
@@ -36,7 +45,10 @@ class ScSMTSolverJVM(condition: ScExp, primitives: Map[String, String] = Map()) 
         (VNil)
         (VString (unwrap-string String))
         (VPrim (unwrap-prim String)))))
+  """
 
+  private val prelude: String =
+    """
   (declare-fun char/c (V) V)
 
   (define-fun >/c ((v1 V) (v2 V)) V
@@ -122,13 +134,39 @@ class ScSMTSolverJVM(condition: ScExp, primitives: Map[String, String] = Map()) 
      (VBool true))
     """.stripMargin
 
+  protected lazy val sortVName: Symbol =
+    context.mkSymbol("V")
+
+  protected lazy val sortV: DatatypeSort = {
+    context.mkDatatypeSort(
+      sortVName,
+      Array(
+        context.mkConstructor("VInt", "is_int", Array("unwrap-int"), Array(context.getIntSort()), null),
+        context.mkConstructor("VBool", "is_bool", Array("unwrap-bool"), Array(context.getBoolSort()), null),
+        context.mkConstructor("VProc", "is_proc", Array("unwrap-proc"), Array(context.getIntSort()), null),
+        context.mkConstructor("VPai", "is_pai", Array("car", "cdr"), Array(null, null), Array(0, 0)),
+        context.mkConstructor("VNil", "is_nil", Array[String](), Array(), null),
+        context.mkConstructor("VString", "is_string", Array("unwrap-string"), Array(context.getStringSort()), null),
+        context.mkConstructor("VPrim", "is_prim", Array("unwrap-prim"), Array(context.getStringSort()), null)
+      )
+    )
+  }
+
+  /** Computes the list of symbols from the variables */
+  protected def symbols: Array[Symbol] =
+    variables.map(context.mkSymbol).toArray
+
+  /** Computes a list of symbols that can be added as declare-consts to the solver */
+  protected def funDecls(symbols: Array[Symbol]): Array[FuncDecl] =
+    symbols.map(v => context.mkConstDecl(v, sortV))
+
   def transformExpression(exp: ScExp, operand: Boolean = false): Option[String] =
     exp match {
       case ScIdentifier(name, _) =>
         primitives.get(name) match {
           case Some(primitiveName) if operand => Some(primitiveName)
           case _ =>
-            variables = name :: variables
+            variables = variables + name
             Some(name)
         }
       case ScValue(value, _) =>
@@ -163,8 +201,8 @@ class ScSMTSolverJVM(condition: ScExp, primitives: Map[String, String] = Map()) 
    */
   private def transformed: String = {
     val assertions = transform(condition)
-    val constants = variables.toSet.map((v: String) => s"(declare-const ${v} V)").mkString("\n")
-    constants ++ "\n" ++ assertions
+    //val constants = variables.toSet.map((v: String) => s"(declare-const ${v} V)").mkString("\n")
+    assertions
   }
 
   /**
@@ -172,6 +210,14 @@ class ScSMTSolverJVM(condition: ScExp, primitives: Map[String, String] = Map()) 
    * @return true if the formale is satisfiable otherwise false
    */
   def isSat: Boolean = {
+    import ScSMTSolver._
+    isSatWithModel match {
+      case Satisfiable(_) | Unknown => true
+      case _                        => false
+    }
+  }
+
+  def isSatWithModel: ScSMTSolver.Result[V] = {
     // transform the code
     val userCode = transformed
 
@@ -180,12 +226,13 @@ class ScSMTSolverJVM(condition: ScExp, primitives: Map[String, String] = Map()) 
     }
     val smtCode = prelude ++ userCode
 
-    // create a new context and solver
-    val context = new Context()
-    val solver = context.mkSolver()
+    val variableSymbols = symbols
+    val variableFunDecl = funDecls(symbols)
+    val sortSymbols = Array(sortVName)
+    val sorts = Array[Sort](sortV)
 
     // transform the textual representation of the assertions to the internal format of Z3
-    val e: Array[BoolExpr] = context.parseSMTLIB2String(smtCode, null, null, null, null)
+    val e: Array[BoolExpr] = context.parseSMTLIB2String(smtCode, sortSymbols, sorts, variableSymbols, variableFunDecl)
 
     // check whether their exist a model which satisfies all the constraints
     solver.assert_(e)
@@ -196,15 +243,39 @@ class ScSMTSolverJVM(condition: ScExp, primitives: Map[String, String] = Map()) 
     //
     // the unknown case is important as we are making an overapproximation, it would be unsound if we would ignore
     // paths that are not known with the SMT solver to be satisfiable
-    val result = check == Status.SATISFIABLE || check == Status.UNKNOWN
-    if (DEBUG_MODE) {
-      println("SMT SOLVER CHECK", result)
-      println("Checked path ", condition)
-      println(
-        "====================================================================================================="
-      )
+
+    import ScSMTSolver._
+    check match {
+      case Status.SATISFIABLE   => Satisfiable(getModel)
+      case Status.UNKNOWN       => Unknown
+      case Status.UNSATISFIABLE => Unsatisfiable
     }
-    result
+  }
+
+  protected def getModel: Map[String, V] = {
+    import ConcreteValues.Value
+
+    val model = solver.getModel()
+    val constantsDecls = funDecls(symbols)
+    val result = constantsDecls.map(model.getConstInterp(_))
+    val values: Array[Value] = result
+      .map(u =>
+        u.getFuncDecl().getName().toString match {
+          case "VInt"  => Value.Integer(u.getArgs()(0).asInstanceOf[IntNum].getInt())
+          case "VBool" => Value.Bool(u.getArgs()(0).asInstanceOf[BoolExpr].isTrue())
+          case _       => ???
+        }
+      )
+
+    (values
+      .zip(symbols.map(_.toString))
+      .flatMap { case (v, k) =>
+        injectValue(v) match {
+          case Some(v) => Some((k, v))
+          case None    => None
+        }
+      })
+      .toMap
   }
 }
 

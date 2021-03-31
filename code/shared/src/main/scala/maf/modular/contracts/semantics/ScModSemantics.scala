@@ -18,6 +18,8 @@ object ScModSemantics {
     s"x$r"
   }
 
+  def reset: Unit = r = 0
+
   def freshIdent: ScExp =
     ScIdentifier(genSym, Identity.none)
 }

@@ -23,7 +23,8 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
       root: ConcTree,
       inputGenerator: InputGenerator,
       trail: List[Boolean] = List(),
-      ignoredIdentities: Set[Identity] = Set())
+      ignoredIdentities: Set[Identity] = Set(),
+      inputs: Map[String, Val] = Map())
 
   case class ConcolicMonad[X](run: ConcolicContext => (ConcolicContext, Option[X]))
   def abstractMonadInstance: ScAbstractSemanticsMonad[ConcolicMonad] = new ScAbstractSemanticsMonad[ConcolicMonad] {
@@ -94,7 +95,37 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
       t: ScEvalM[X],
       f: ScEvalM[X],
       v: Option[Boolean]
-    ): ScEvalM[X] = nondets(Set(t, f))
+    ): ScEvalM[X] = ConcolicMonad { context =>
+    // note that this is fundemantally different from `nondets` as in
+    // `nondets` the list of computations is unordered
+
+    // we replace the current root that is able to split
+    val newRoot = context.root.replaceAt(context.trail.reverse, branches(context.root, NilNode, NilNode, context.pc))
+
+    // true to execute both branches, as we are in a concrete execution, only one branch should result in a value
+    val (trueContext, trueRes) = t.m.run(context.copy(root = newRoot, trail = true :: context.trail))
+    val (falseContext, falseRes) = f.m.run(context.copy(root = newRoot, trail = false :: context.trail))
+
+    (trueRes, falseRes) match {
+      case (Some(v), None) =>
+        // true branch resulted in a value
+        // update the false branch as well
+        val updatedRoot = trueContext.root.replaceAt((false :: context.trail).reverse, UnexploredNode(falseContext.pc))
+        // TODO: this is not so nice, as we now have safeguards in the tree structure against replacing TreeNodes with UnexploredNode
+        // safeguards would be better here and leaving the tree only as a datastructure
+        (trueContext.copy(root = updatedRoot), Some(v))
+      case (None, Some(v)) =>
+        // false branch result in a vlaue
+        val updatedRoot = falseContext.root.replaceAt((true :: context.trail).reverse, UnexploredNode(trueContext.pc))
+        (falseContext.copy(root = updatedRoot), Some(v))
+      case (None, None) =>
+        // neither resultedin  a value
+        (context, None)
+      case (_, _) =>
+        // both branches resulted in a value
+        throw new Exception("non determinism not allowed")
+    }
+  }
 
   /**
    * Creates a new root given the new left and right branches.
@@ -109,17 +140,17 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
     ): ConcTree = root match {
     case TreeNode(oldLeft, oldRight, pc) =>
       val newLeft = oldLeft match {
-        case UnexploredNode(_)          => left
-        case _ if oldLeft.pc == left.pc => oldLeft
-        case _                          =>
+        case UnexploredNode(_) | NilNode => left
+        case _ if oldLeft.pc == left.pc  => oldLeft
+        case _                           =>
           // current left is not unexplored, and it also didn't adhere
           // to the current tree structure, which means that we have found a bug
           throw new Exception("Inconsistent tree")
       }
 
       val newRight = oldRight match {
-        case UnexploredNode(_)            => oldLeft
-        case _ if oldRight.pc == right.pc => right
+        case UnexploredNode(_) | NilNode  => right
+        case _ if oldRight.pc == right.pc => oldRight
         case _                            =>
           // current right is not unexplored, and it also didn't adhere
           // to the current tree structure, which means that we have found a bug
@@ -132,29 +163,8 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   }
 
   override def nondets[X](s: Set[ScEvalM[X]]): ScEvalM[X] = ConcolicMonad { context =>
-    if (s.size == 2) {
-      // two branches, usually from if condition
-      val cs = s.toList
-      val (leftContext, leftValue) = cs(0).m.run(context)
-      val (rightContext, rightValue) = cs(1).m.run(context)
-
-      val leftTree = leftContext.root.modifyPc(pc = leftContext.pc)
-      val rightTree = rightContext.root.modifyPc(pc = rightContext.pc)
-      val newRoot = branches(context.root, leftTree, rightTree, context.pc)
-
-      (leftValue, rightValue) match {
-        case (Some(v), None) =>
-          (leftContext.copy(root = newRoot, trail = true :: leftContext.trail), Some(v))
-        case (None, Some(v)) =>
-          (rightContext.copy(root = newRoot, trail = false :: rightContext.trail), Some(v))
-
-        case (None, None) =>
-          (context.copy(root = newRoot), None)
-
-        case (_, _) =>
-          throw new Exception("Non-determinism not allowed in concolic tester")
-      }
-    } else if (s.size > 2) {
+    // s.size == 2 already handled by nondet
+    if (s.size > 2) {
       throw new Exception("Non-determinism is not allowed in the concolic tester (size > 2)")
     } else if (s.size == 1) {
       // single path, determnistic
@@ -219,6 +229,10 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
       case _                 => context.root
     }
     (context.copy(root = newRoot), Some(()))
+  }
+
+  def withContext[A](f: ConcolicContext => ScEvalM[A]): ScEvalM[A] = ConcolicMonad { context =>
+    f(context).m.run(context)
   }
 
   /** Run the given computation without any initial context */

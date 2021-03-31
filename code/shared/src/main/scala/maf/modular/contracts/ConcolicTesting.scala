@@ -30,6 +30,7 @@ import maf.language.contracts.ScFunctionAp
 import maf.concolic.contracts.ConcTree
 import maf.concolic.contracts.ValueNode
 import maf.concolic.contracts.Nearest
+import maf.concolic.contracts.ExplorationStrategy
 
 case class PrimitiveNotFound(name: String) extends Exception {
   override def getMessage(): String =
@@ -187,10 +188,10 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
    */
   override def evalOpaque(refinements: Set[String]): ScEvalM[PostValue] = {
     val symbolicVariable = ScModSemantics.genSym
-    addSymbolicVariable(symbolicVariable) >> withInputGenerator { generator =>
+    addSymbolicVariable(symbolicVariable) >> withContext { context =>
       val id = ScIdentifier(symbolicVariable, Identity.none)
-      val value = generator.generate(Opq(refinements), id)
-      pure(PS(value, id))
+      val value = context.inputGenerator.generate(Opq(refinements), id)
+      pure(PS(context.inputs.get(symbolicVariable).getOrElse(value), id))
     }
   }
 
@@ -211,7 +212,11 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
  *  It does not result in an error when this maximal depth is reached, rather it records
  *  a stackoverflow error in the exploration tree, and continues the analysis.
  */
-abstract class ConcolicTesting(exp: ScExp, var maxdepth: Int = 100) extends ConcolicAnalysisSemantics {
+abstract class ConcolicTesting(
+    exp: ScExp,
+    var maxdepth: Int = 100,
+    exploration: ExplorationStrategy = Nearest)
+    extends ConcolicAnalysisSemantics {
   import ConcreteValues.Value
 
   private var _results: List[Value] = List()
@@ -259,26 +264,53 @@ abstract class ConcolicTesting(exp: ScExp, var maxdepth: Int = 100) extends Conc
     )
 
   def analyzeWithTimeout(timeout: Timeout.T): Unit = {
-    analyzeOnce()
+    var next: Option[(ConcolicContext, Map[String, Val])] = Some((initialContext(), Map()))
+    var ccontext = next.get._1
+    var iters = 0
+    do {
+      // TODO: put counter for gensym in the state of the concolic tester
+      ScModSemantics.reset
+      val inputs = next.get._2
+      ccontext = next.get._1
+      println(s"Running with inputs ${inputs}")
+
+      val result = analysisIteration(initialContext().copy(root = ccontext.root, inputs = inputs))
+      ccontext = result._1
+      val value = result._2
+
+      println(s"Got final value ${value}")
+      _results = value :: _results
+      next = nextTarget(ccontext)
+      iters = iters + 1
+    } while (next.isDefined && !timeout.reached)
+
+    println(_results)
+    println(ccontext.root)
+    println(s"done in ${iters} iterations")
   }
 
   def analyze(): Unit = analyzeWithTimeout(Timeout.none)
-  def analyzeOnce(context: ConcolicContext = initialContext()): Value = {
+  def analyzeOnce(context: ConcolicContext = initialContext()): Value =
+    analysisIteration(context)._2
+
+  private def nextTarget(context: ConcolicContext): Option[(ConcolicContext, Map[String, Value])] =
+    for {
+      next_target <- exploration.next(context.root, context.trail.reverse, isSat)
+    } yield (context.copy(root = next_target.modifiedTree), next_target.model)
+
+  private def analysisIteration(context: ConcolicContext = initialContext()): (ConcolicContext, Value) = {
     // evaluate the expression in the given context
     val (finalContext, value) = eval(exp).m.run(context)
+
     // set the final node to a value node
     val root = if (value.isDefined) {
-      finalContext.root.replaceAt(finalContext.trail, ConcTree.value(value.get.pure))
+      finalContext.root.replaceAt(finalContext.trail.reverse, ConcTree.value(value.get.pure, finalContext.pc))
     } else {
       finalContext.root
     }
 
-    println(root)
-    println(Nearest.next(root, finalContext.trail))
-
     // keep track of the results
-    _results = value.get.pure :: _results
-    _results.head
+    (finalContext.copy(root = root), value.get.pure)
   }
 
   override def evaluatedValue(value: PostValue): ScEvalM[PostValue] = modifyConcTree(pc => ValueNode(value.pure, pc)) >> pure(value)
@@ -287,5 +319,5 @@ abstract class ConcolicTesting(exp: ScExp, var maxdepth: Int = 100) extends Conc
    * Checks whether the given path condition is satisfiable, and
    * returns example outputs
    */
-  def isSat(exp: ScExp): List[Val]
+  def isSat(exp: ScExp): Option[Map[String, Val]]
 }

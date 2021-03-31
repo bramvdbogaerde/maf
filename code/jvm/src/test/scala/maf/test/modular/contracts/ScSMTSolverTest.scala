@@ -4,9 +4,9 @@ import maf.modular.contracts.ScSMTSolverJVM
 import maf.test.{ScTestsJVM, ScTestsJVMLocalStore}
 
 class ScSMTSolverTest extends ScTestsJVMLocalStore {
-  private def test(expression: String, message: String)(f: ScSMTSolverJVM => Unit): Unit = {
+  private def test(expression: String, message: String)(f: ScSMTSolverJVM[Nothing] => Unit): Unit = {
     expression.should(message).in {
-      val pc     = compile(expression)
+      val pc = compile(expression)
       val solver = new ScSMTSolverJVM(pc, primitivesMap)
       f(solver)
     }

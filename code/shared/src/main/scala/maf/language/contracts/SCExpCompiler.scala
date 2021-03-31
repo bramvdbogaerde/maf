@@ -136,6 +136,9 @@ object SCExpCompiler {
     case Ident("set!") :: IdentWithIdentity(name, idn) :: exp :: SExpValue(Value.Nil, _) =>
       ScSet(ScIdentifier(name, idn), compile(exp), prog.idn)
 
+    case Ident("set!") :: _ =>
+      throw new Exception(s"invalid set! expression at ${prog.idn}")
+
     case Ident("flat") :: expr :: ListNil(_) =>
       ScFlatContract(compile(expr), prog.idn)
 
