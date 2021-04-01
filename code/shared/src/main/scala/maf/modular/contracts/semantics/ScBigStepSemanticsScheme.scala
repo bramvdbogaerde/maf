@@ -164,6 +164,8 @@ trait ScSharedSemantics extends ScSemantics {
     withIgnoredIdentities { ignored =>
       if (!ignored.contains(blamedIdentity)) {
         throwBlameError(Blame(blamedIdentity, blamingIdentity))
+      } else {
+        unit
       }
     } >> void
 
@@ -538,7 +540,11 @@ trait ScSharedSemantics extends ScSemantics {
             List(expressionValue.symbolic)
     ) // TODO: operator is specified to be nil, that might give an issue with store changing flat contracts
       .flatMap { value =>
-        cond(value, pure(enrich(contract, expressionValue)), if (doBlame) blame(blamedIdentity, blamingIdentity) else void)
+        cond(
+          value,
+          pure(enrich(contract, expressionValue)),
+          if (doBlame) blame(blamedIdentity, blamingIdentity) else void
+        )
       }
 
   def cond[X](

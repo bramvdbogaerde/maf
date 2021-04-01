@@ -144,10 +144,12 @@ object SCExpCompiler {
     case Ident("flat") :: expr :: ListNil(_) =>
       ScFlatContract(compile(expr), prog.idn)
 
+    /*
     case (Ident("~>") | Ident("->")) :: domain :: range :: ListNil(_) =>
       val domainCompiled = compile(domain)
       val rangeCompiled = compile(range)
       ScHigherOrderContract(domainCompiled, rangeCompiled, prog.idn)
+     */
 
     case (Ident("~>") | Ident("->")) :: contracts =>
       val compiledContracts = compile_fn_contracts(contracts)

@@ -198,7 +198,7 @@ trait ScAbstractSemanticsMonadAnalysis {
    * ignored identities refer to values of which the validity of the
    * contract does not matter
    */
-  def withIgnoredIdentities[X](f: List[Identity] => X): ScEvalM[X]
+  def withIgnoredIdentities[X](f: List[Identity] => ScEvalM[X]): ScEvalM[X]
 
   /** Adds an ignored identity to the context */
   def addIgnored(idns: Iterable[Identity]): ScEvalM[()]

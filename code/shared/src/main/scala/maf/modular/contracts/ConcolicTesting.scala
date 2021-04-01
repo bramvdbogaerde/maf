@@ -31,6 +31,8 @@ import maf.concolic.contracts.ConcTree
 import maf.concolic.contracts.ValueNode
 import maf.concolic.contracts.Nearest
 import maf.concolic.contracts.ExplorationStrategy
+import maf.language.contracts.lattices.ScConcreteValues.GrdValue
+import maf.language.contracts.lattices.ScConcreteValues.ClosureValue
 
 case class PrimitiveNotFound(name: String) extends Exception {
   override def getMessage(): String =
@@ -40,6 +42,33 @@ case class PrimitiveNotFound(name: String) extends Exception {
 object ScConcretePrimitives {
   import ConcreteValues._
   import scala.collection.immutable.Nil
+
+  object `dependent-contract?` extends SimplePrim {
+    override val name: String = "dependent-contract?"
+
+    override def call(args: List[ConcreteValues.Value], position: Position.Position): ConcreteValues.Value = {
+      args match {
+        case GrdValue(_) :: Nil => {
+          Value.Bool(true)
+        }
+        case _ :: Nil => {
+          Value.Bool(false)
+        }
+        case _ => throw new Exception(s"$name: invalid number of arguments, expected 1 got ${args.size}")
+      }
+    }
+  }
+
+  object `procedure?` extends SimplePrim {
+    override val name: String = "procedure?"
+    override def call(args: List[ConcreteValues.Value], position: Position.Position): ConcreteValues.Value = args match {
+      case ClosureValue(_) :: Nil      => Value.Bool(true)
+      case (_: Value.Clo) :: Nil       => Value.Bool(true)
+      case (_: Value.Primitive) :: Nil => Value.Bool(true)
+      case _ :: Nil                    => Value.Bool(false)
+      case _                           => throw new Exception(s"$name: invalid number of arguments, expected 1 got ${args.size}")
+    }
+  }
 
   object `true?` extends SimplePrim {
 
@@ -136,8 +165,11 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
 
   import ScConcretePrimitives._
   private def interop = new MonadicSchemeInterpreter(ConcolicStore(Map()))
+  private def scPrimitives =
+    List(`true?`, `false?`, `dependent-contract?`, `procedure?`)
+
   private lazy val allPrimitives =
-    (interop.Primitives.allPrimitives.map(_._2) ++ List(`true?`, `false?`)).map(p => (p.name, p)).toMap
+    (interop.Primitives.allPrimitives.map(_._2) ++ scPrimitives).map(p => (p.name, p)).toMap
 
   override def primMap(v: String): Prim =
     allPrimitives.get(v).getOrElse(throw PrimitiveNotFound(v))
@@ -147,7 +179,8 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
 
   override def primName(p: Prim): String = p.name
 
-  override def throwBlameError(blame: ScLattice.Blame): ScEvalM[Unit] = ???
+  override def throwBlameError(blame: ScLattice.Blame): ScEvalM[Unit] =
+    error(ConcTree.blame(BlameValue(blame)))
 
   override def callPrimitive(p: PrimitiveOperator, args: List[Argument]): ScEvalM[PostValue] = for {
     // install the current store
@@ -225,7 +258,7 @@ abstract class ConcolicTesting(
   private val root: maf.concolic.contracts.ConcTree = maf.concolic.contracts.ConcTree.empty
 
   def tree: ConcTree = _tree
-  def results: List[Value] = _results
+  def results: List[Value] = _results.filterNot(_ == Value.Nil)
 
   /** Overrides the original `call` to take the maximum recursion depth into account */
   override def call(clo: ScLattice.Clo[ScConcreteValues.ScAddr], operands: List[PS]): ScEvalM[PS] = unit.flatMap(_ => {
@@ -279,6 +312,7 @@ abstract class ConcolicTesting(
     do {
       reset
       val inputs = next.get
+      println(s"Got inputs $inputs")
       val result = analysisIteration(initialContext().copy(root = ccontext.root, inputs = inputs))
       ccontext = result._1
       val value = result._2
@@ -290,7 +324,7 @@ abstract class ConcolicTesting(
       ccontext = nt._1
 
       iters = iters + 1
-    } while (next.isDefined && !timeout.reached)
+    } while (next.isDefined && !timeout.reached && iters < 10)
 
     _tree = ccontext.root
     println(_results)

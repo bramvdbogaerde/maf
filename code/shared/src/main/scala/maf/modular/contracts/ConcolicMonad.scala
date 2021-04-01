@@ -81,9 +81,8 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
     f(context.env).m.run(context)
   }
 
-  override def withIgnoredIdentities[X](f: List[Identity] => X): ScEvalM[X] = ConcolicMonad { context =>
-    val res = f(context.ignoredIdentities.toList)
-    (context, Some(res))
+  override def withIgnoredIdentities[X](f: List[Identity] => ScEvalM[X]): ScEvalM[X] = ConcolicMonad { context =>
+    f(context.ignoredIdentities.toList).m.run(context)
   }
 
   override def addIgnored(idns: Iterable[Identity]): ScEvalM[Unit] = ConcolicMonad { context =>
@@ -122,6 +121,7 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
         (falseContext.copy(root = updatedRoot), Some(v))
       case (None, None) =>
         // neither resultedin  a value
+        //
         if (trueContext.error) {
           val updatedRoot = trueContext.root.replaceAt((false :: context.trail).reverse, UnexploredNode(falseContext.pc))
           (trueContext.copy(root = updatedRoot), None)
@@ -168,8 +168,24 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   }
 
   override def nondets[X](s: Set[ScEvalM[X]]): ScEvalM[X] = ConcolicMonad { context =>
-    // s.size == 2 already handled by nondet
-    if (s.size > 2) {
+    if (s.size == 2) {
+      val elements = s.toList
+      val (firstContext, firstRes) = elements(0).m.run(context)
+      val (secondContext, secondRes) = elements(1).m.run(context)
+      (firstRes, secondRes) match {
+        case (Some(_), None) =>
+          (firstContext, firstRes)
+        case (None, Some(_)) =>
+          (secondContext, secondRes)
+        case (None, None) if firstContext.error && !secondContext.error =>
+          (firstContext, None)
+        case (None, None) if !firstContext.error && secondContext.error =>
+          (secondContext, None)
+        case _ =>
+          throw new Exception("invalid case in nondets, at least one path must be an error or a value")
+      }
+
+    } else if (s.size > 2) {
       throw new Exception("Non-determinism is not allowed in the concolic tester (size > 2)")
     } else if (s.size == 1) {
       // single path, determnistic

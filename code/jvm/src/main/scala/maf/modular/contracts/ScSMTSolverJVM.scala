@@ -162,6 +162,7 @@ class ScSMTSolverJVM[V](
 
   def transformExpression(exp: ScExp, operand: Boolean = false): Option[String] =
     exp match {
+      case ScIdentifier("dependent-contract?", _) => None
       case ScIdentifier(name, _) =>
         primitives.get(name) match {
           case Some(primitiveName) if operand => Some(primitiveName)
@@ -222,6 +223,7 @@ class ScSMTSolverJVM[V](
     val userCode = transformed
 
     if (DEBUG_MODE) {
+      println(s"variables $variables")
       println(userCode)
     }
     val smtCode = prelude ++ userCode

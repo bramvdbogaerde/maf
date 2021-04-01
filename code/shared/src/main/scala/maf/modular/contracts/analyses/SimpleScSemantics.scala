@@ -34,7 +34,8 @@ object SimpleScSemantics {
     "char?" -> "char?/c",
     "pair?" -> "pair?/c",
     "string-length" -> "string-length",
-    "null?" -> "null?/c"
+    "null?" -> "null?/c",
+    "dependent-contract?" -> "dependent-contract/c"
   )
 }
 
@@ -178,7 +179,7 @@ abstract class SimpleScSemantics(prg: ScExp)
        * ignored identities refer to values of which the validity of the
        * contract does not matter
        */
-      override def withIgnoredIdentities[X](f: List[Identity] => X): ScEvalM[X] = ???
+      override def withIgnoredIdentities[X](f: List[Identity] => ScEvalM[X]): ScEvalM[X] = ???
 
       /** Adds an ignored identity to the context */
       override def addIgnored(idns: Iterable[Identity]): ScEvalM[Unit] = ???

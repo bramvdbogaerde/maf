@@ -4,6 +4,7 @@ import maf.language.contracts.ScExp
 import maf.language.contracts.ScNil
 import maf.language.scheme.interpreter.ConcreteValues
 import java.io.PrintWriter
+import maf.language.contracts.lattices.ScConcreteValues.BlameValue
 
 trait RenderToDot {
   def toDot(writer: PrintWriter): Unit
@@ -122,6 +123,11 @@ object ConcTree {
 
   def stackoverflow(pc: ScExp): ConcTree = ErrorNode(
     error = "Stack overflow",
+    pc
+  )
+
+  def blame(contract: BlameValue)(pc: ScExp): ConcTree = ErrorNode(
+    error = s"Blame ${contract}",
     pc
   )
 
