@@ -89,6 +89,7 @@ trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
   analyze("(define (f x) (if (= x 1) 1 0)) (f 1)", Integer(1))
   analyze("(define (f x) (if (= x 1) 1 0)) (f 0)", Integer(0))
   analyze("(define (fac x) (if (= x 0) 1 (* x (fac (- x 1))))) (fac 5)", Integer(120))
+
   analyzeComplete("(define x (OPQ number?)) (define y 0) (if (> x 0) (set! y 1) (set! y 2)) (if (=  x 0) (set! y (+ y 1)) (set! y (+ y 2)))",
                   Set(Integer(4), Integer(3))
   )
@@ -96,7 +97,7 @@ trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
   analyzeComplete(
     """
     (define (foo x)
-        (if (< x 2)
+        (if (< x 4)
             (foo (+ x 1))
             #t))
 
@@ -109,6 +110,20 @@ trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
   """,
     Set(Bool(true), Bool(false)),
     name = "recursion"
+  )
+
+  analyzeComplete(
+    """
+    (define (foo x)
+        (cond 
+          ((< x 0) #f)
+          ((< x 4) (foo (+ x 1)))
+          (else #t)))
+
+    (foo (OPQ number?))
+  """,
+    Set(Bool(true), Bool(false)),
+    name = "recursion2"
   )
   analyzeMatches("(OPQ boolean?)") { case Bool(_) => }
   analyzeMatches("(OPQ number?)") { case Integer(_) => }
