@@ -264,14 +264,13 @@ abstract class ConcolicTesting(
     )
 
   def analyzeWithTimeout(timeout: Timeout.T): Unit = {
-    var next: Option[(ConcolicContext, Map[String, Val])] = Some((initialContext(), Map()))
-    var ccontext = next.get._1
+    var next: Option[Map[String, Val]] = Some(Map())
+    var ccontext = initialContext()
     var iters = 0
     do {
       // TODO: put counter for gensym in the state of the concolic tester
       ScModSemantics.reset
-      val inputs = next.get._2
-      ccontext = next.get._1
+      val inputs = next.get
       println(s"Running with inputs ${inputs}")
 
       val result = analysisIteration(initialContext().copy(root = ccontext.root, inputs = inputs))
@@ -280,7 +279,11 @@ abstract class ConcolicTesting(
 
       println(s"Got final value ${value}")
       _results = value :: _results
-      next = nextTarget(ccontext)
+
+      val nt = nextTarget(ccontext)
+      next = nt._2
+      ccontext = nt._1
+
       iters = iters + 1
     } while (next.isDefined && !timeout.reached)
 
@@ -293,10 +296,24 @@ abstract class ConcolicTesting(
   def analyzeOnce(context: ConcolicContext = initialContext()): Value =
     analysisIteration(context)._2
 
-  private def nextTarget(context: ConcolicContext): Option[(ConcolicContext, Map[String, Value])] =
-    for {
-      next_target <- exploration.next(context.root, context.trail.reverse, isSat)
-    } yield (context.copy(root = next_target.modifiedTree), next_target.model)
+  private def nextTarget(context: ConcolicContext): (ConcolicContext, Option[Map[String, Value]]) = {
+    var tree = context.root
+    val walker = exploration.start(tree, context.trail)
+    def find: Option[Map[String, Val]] = {
+      walker.next() match {
+        case Some((pc, trail)) =>
+          isSat(pc) match {
+            case Some(model) => Some(model)
+            case _ =>
+              tree = tree.replaceAt(trail, ConcTree.unsat(pc))
+              find
+          }
+        case None => None
+      }
+    }
+    val result = find
+    (context.copy(root = tree), result)
+  }
 
   private def analysisIteration(context: ConcolicContext = initialContext()): (ConcolicContext, Value) = {
     // evaluate the expression in the given context
@@ -309,7 +326,6 @@ abstract class ConcolicTesting(
       finalContext.root
     }
 
-    // keep track of the results
     (finalContext.copy(root = root), value.get.pure)
   }
 
