@@ -127,7 +127,7 @@ object ConcTree {
 
   def toDot(tree: ConcTree, writer: PrintWriter): Unit = {
     writer.write("digraph G {\n")
-    writer.write("rankdir = \"LR\"\n")
+    //writer.write("rankdir = \"LR\"\n")
     tree.toDot(writer)
     writer.write("}")
   }
