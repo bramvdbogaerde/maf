@@ -220,7 +220,10 @@ abstract class ConcolicTesting(
   import ConcreteValues.Value
 
   private var _results: List[Value] = List()
+  private var _tree: ConcTree = ConcTree.empty
   private val root: maf.concolic.contracts.ConcTree = maf.concolic.contracts.ConcTree.empty
+
+  def tree: ConcTree = _tree
   def results: List[Value] = _results
 
   /** Overrides the original `call` to take the maximum recursion depth into account */
@@ -287,6 +290,7 @@ abstract class ConcolicTesting(
       iters = iters + 1
     } while (next.isDefined && !timeout.reached)
 
+    _tree = ccontext.root
     println(_results)
     println(ccontext.root)
     println(s"done in ${iters} iterations")

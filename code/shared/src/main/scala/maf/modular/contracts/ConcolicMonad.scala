@@ -99,8 +99,10 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
     // note that this is fundemantally different from `nondets` as in
     // `nondets` the list of computations is unordered
 
+    println(context.root.followTrail(context.trail.reverse))
     // we replace the current root that is able to split
-    val newRoot = context.root.replaceAt(context.trail.reverse, branches(context.root, NilNode, NilNode, context.pc))
+    val newRoot =
+      context.root.replaceAt(context.trail.reverse, branches(context.root.followTrail(context.trail.reverse), NilNode, NilNode, context.pc))
 
     // true to execute both branches, as we are in a concrete execution, only one branch should result in a value
     val (trueContext, trueRes) = t.m.run(context.copy(root = newRoot, trail = true :: context.trail))
@@ -138,28 +140,24 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
       right: ConcTree,
       pc: PC
     ): ConcTree = root match {
-    case TreeNode(oldLeft, oldRight, pc) =>
+    case TreeNode(oldLeft, oldRight, oldPc) =>
       val newLeft = oldLeft match {
         case UnexploredNode(_) | NilNode => left
-        case _ if oldLeft.pc == left.pc  => oldLeft
-        case _                           =>
-          // current left is not unexplored, and it also didn't adhere
-          // to the current tree structure, which means that we have found a bug
-          throw new Exception("Inconsistent tree")
+        case _ if oldLeft.pc != left.pc  => oldLeft
+        case _                           => left
       }
 
       val newRight = oldRight match {
         case UnexploredNode(_) | NilNode  => right
-        case _ if oldRight.pc == right.pc => oldRight
-        case _                            =>
-          // current right is not unexplored, and it also didn't adhere
-          // to the current tree structure, which means that we have found a bug
-          throw new Exception("Incosistent tree")
+        case _ if oldRight.pc != right.pc => oldRight
+        case _                            => right
       }
+      println(s"oldpc = $oldPc, newpc = $pc")
 
       TreeNode(newLeft, newRight, pc)
-    case UnexploredNode(_) => TreeNode(left, right, pc)
-    case _                 => throw new Exception("Incosistent tree")
+    case UnexploredNode(_) | NilNode => TreeNode(left, right, pc)
+    case _ =>
+      throw new Exception("Incosistent tree")
   }
 
   override def nondets[X](s: Set[ScEvalM[X]]): ScEvalM[X] = ConcolicMonad { context =>
