@@ -214,13 +214,14 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
  */
 abstract class ConcolicTesting(
     exp: ScExp,
-    var maxdepth: Int = 100,
+    defaultMaxDepth: Int = 100,
     exploration: ExplorationStrategy = Nearest)
     extends ConcolicAnalysisSemantics {
   import ConcreteValues.Value
 
   private var _results: List[Value] = List()
   private var _tree: ConcTree = ConcTree.empty
+  private var maxdepth = defaultMaxDepth
   private val root: maf.concolic.contracts.ConcTree = maf.concolic.contracts.ConcTree.empty
 
   def tree: ConcTree = _tree
@@ -232,8 +233,7 @@ abstract class ConcolicTesting(
       maxdepth = maxdepth - 1
       super.call(clo, operands)
     } else {
-      println("stack too deep")
-      modifyConcTree(ConcTree.stackoverflow) >> void
+      error(ConcTree.stackoverflow) >> void
     }
   })
 
@@ -266,21 +266,23 @@ abstract class ConcolicTesting(
       inputGenerator = InputGenerator(Map())
     )
 
+  protected def reset: Unit = {
+    // TODO: put counter for gensym in the state of the concolic tester
+    maxdepth = defaultMaxDepth
+    ScModSemantics.reset
+  }
+
   def analyzeWithTimeout(timeout: Timeout.T): Unit = {
     var next: Option[Map[String, Val]] = Some(Map())
     var ccontext = initialContext()
     var iters = 0
     do {
-      // TODO: put counter for gensym in the state of the concolic tester
-      ScModSemantics.reset
+      reset
       val inputs = next.get
-      println(s"Running with inputs ${inputs}")
-
       val result = analysisIteration(initialContext().copy(root = ccontext.root, inputs = inputs))
       ccontext = result._1
       val value = result._2
 
-      println(s"Got final value ${value}")
       _results = value :: _results
 
       val nt = nextTarget(ccontext)
@@ -307,7 +309,8 @@ abstract class ConcolicTesting(
       walker.next() match {
         case Some((pc, trail)) =>
           isSat(pc) match {
-            case Some(model) => Some(model)
+            case Some(model) =>
+              Some(model)
             case _ =>
               tree = tree.replaceAt(trail, ConcTree.unsat(pc))
               find
@@ -330,10 +333,10 @@ abstract class ConcolicTesting(
       finalContext.root
     }
 
-    (finalContext.copy(root = root), value.get.pure)
+    (finalContext.copy(root = root), value.map(_.pure).getOrElse(Value.Nil))
   }
 
-  override def evaluatedValue(value: PostValue): ScEvalM[PostValue] = modifyConcTree(pc => ValueNode(value.pure, pc)) >> pure(value)
+  override def evaluatedValue(value: PostValue): ScEvalM[PostValue] = ???
 
   /**
    * Checks whether the given path condition is satisfiable, and

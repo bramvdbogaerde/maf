@@ -108,7 +108,7 @@ class ScSMTSolverJVM[V](
       (VInt (- (unwrap-int v1) (unwrap-int v2))))
     
     (define-fun +/c ((v1 V) (v2 V)) V
-      (VInt (- (unwrap-int v1) (unwrap-int v2))))
+      (VInt (+ (unwrap-int v1) (unwrap-int v2))))
       
     (define-fun */c ((v1 V) (v2 V)) V
       (VInt (- (unwrap-int v1) (unwrap-int v2))))

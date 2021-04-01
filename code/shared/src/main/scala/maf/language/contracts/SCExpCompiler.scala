@@ -72,6 +72,8 @@ object SCExpCompiler {
   /** Transforms a conditional-expression to an equivalent if-expression */
   def compile_branches(exp: SExp): ScExp = exp match {
     case ListNil(idn) => ScNil(idn)
+    case SExpPair((IdentWithIdentity("else", idn) :: expressions), rest @ ListNil(_), _) =>
+      ScIf(ScValue(Value.Boolean(true), idn), ScBegin(compile_sequence(expressions), Identity.none), compile_branches(rest), exp.idn)
     case SExpPair((condition :: expressions), rest, _) =>
       ScIf(compile(condition), ScBegin(compile_sequence(expressions), Identity.none), compile_branches(rest), exp.idn)
   }

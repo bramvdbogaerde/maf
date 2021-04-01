@@ -9,6 +9,10 @@ import maf.language.contracts.SCExpCompiler
 import maf.concolic.contracts.Oracle
 import maf.language.scheme.interpreter.ConcreteValues.Value
 import maf.modular.contracts.semantics.ScModSemantics
+import java.io.PrintWriter
+import java.io.File
+import maf.concolic.contracts.ConcTree
+import maf.language.contracts.ScPrelude
 
 trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
   def createAnalysis(exp: ScExp): ConcolicTesting
@@ -30,10 +34,15 @@ trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
     analysis.analyzeOnce()
   }
 
-  protected def runAnalysisComplete(program: String): List[Value] = {
+  protected def runAnalysisComplete(program: String, name: String = "untitled"): List[Value] = {
     val exp = SCExpCompiler.read(program)
     val analysis = createAnalysis(exp)
     analysis.analyze()
+
+    val writer = new PrintWriter(new File(s"./out/${name}.dot"))
+    ConcTree.toDot(analysis.tree, writer)
+    writer.close()
+
     analysis.results
   }
 
@@ -49,11 +58,19 @@ trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
     }
   }
 
-  protected def analyzeComplete(program: String, expected: Set[Value]): Unit = withFixture {
-    program should s"evaluate to values $expected" in {
-      runAnalysisComplete(program).toSet shouldEqual expected
+  protected def analyzeComplete(
+      program: String,
+      expected: Set[Value],
+      desc: String = "",
+      name: String = "untitled"
+    ): Unit = withFixture {
+    program should s"evaluate to values ${if (desc.isEmpty) expected else desc}" in {
+      runAnalysisComplete(program, name).toSet shouldEqual expected
     }
   }
+
+  protected def analyzeWithPrelude(program: String, expected: Set[Value]): Unit =
+    analyzeComplete(ScPrelude.preludeString ++ program, expected, program)
 
   import ConcreteValues.Value._
   analyze("(+ 1 1)", Integer(2))
@@ -74,6 +91,24 @@ trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
   analyze("(define (fac x) (if (= x 0) 1 (* x (fac (- x 1))))) (fac 5)", Integer(120))
   analyzeComplete("(define x (OPQ number?)) (define y 0) (if (> x 0) (set! y 1) (set! y 2)) (if (=  x 0) (set! y (+ y 1)) (set! y (+ y 2)))",
                   Set(Integer(4), Integer(3))
+  )
+
+  analyzeComplete(
+    """
+    (define (foo x)
+        (if (< x 2)
+            (foo (+ x 1))
+            #t))
+
+    (define (bar x)
+      (if (< x 0)
+          #f 
+          (foo x)))
+
+    (bar (OPQ number?))
+  """,
+    Set(Bool(true), Bool(false)),
+    name = "recursion"
   )
   analyzeMatches("(OPQ boolean?)") { case Bool(_) => }
   analyzeMatches("(OPQ number?)") { case Integer(_) => }
