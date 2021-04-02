@@ -125,6 +125,38 @@ trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
     Set(Bool(true), Bool(false)),
     name = "recursion2"
   )
+
+  analyzeComplete(
+    """
+    (define (=/c a) (lambda (x) (= x a)))
+    (define/contract (foo x)
+      (-> (=/c 2) number?)
+      (+ x 1))
+
+    (foo (OPQ number?))
+    """,
+    Set(Integer(3)),
+    name = "contracts1"
+  )
+
+  analyzeComplete(
+    """
+    (define (=/c a) (lambda (x) (= x a)))
+    (define (>/c a) (lambda (x) (> x a)))
+
+    (define/contract (bar x)
+      (-> (>/c 1) number?)
+      (+ x 1))
+
+    (define/contract (foo x)
+      (-> (=/c 2) number?)
+      (bar x))
+
+    (foo (OPQ number?))
+    """,
+    Set(Integer(3)),
+    name = "contracts2"
+  )
   analyzeMatches("(OPQ boolean?)") { case Bool(_) => }
   analyzeMatches("(OPQ number?)") { case Integer(_) => }
   analyzeMatches("(OPQ string?)") { case Str(_) => }
