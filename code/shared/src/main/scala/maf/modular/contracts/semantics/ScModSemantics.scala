@@ -10,6 +10,7 @@ import maf.lattice.interfaces.BoolLattice
 
 import maf.modular.contracts.domain.ScDomain
 import maf.modular.contracts._
+import maf.core.BasicEnvironment
 
 object ScModSemantics {
   var r = 0
@@ -77,7 +78,7 @@ trait ScModSemantics
   }
 
   /** The environment in which the analysis is executed */
-  type Env = Environment[Address]
+  type Env = BasicEnvironment[Address]
 
   /** The type of a call component creator */
   type CreateCallComponent = (Env, ScLambda, ComponentContext) => Call[ComponentContext]

@@ -33,3 +33,16 @@ trait Store[A <: Address, V] extends SmartHash {
   /** Tries to update an address if it's already mapped into the store. Otherwise, extend the store */
   def updateOrExtend(a: A, v: V): Store[A, V] = extend(a, v)
 }
+
+/* A store based on a map */
+case class StoreMap[A <: Address, V](map: Map[A, V]) extends Store[A, V] {
+
+  /** Looks up a value in the store */
+  def lookup(a: A): Option[V] =
+    map.get(a)
+
+  /** Add a new entry in the store */
+  def extend(a: A, v: V): Store[A, V] =
+    StoreMap(map + (a -> v))
+
+}

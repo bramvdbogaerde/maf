@@ -90,8 +90,10 @@ trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
   analyze("(define (f x) (if (= x 1) 1 0)) (f 0)", Integer(0))
   analyze("(define (fac x) (if (= x 0) 1 (* x (fac (- x 1))))) (fac 5)", Integer(120))
 
-  analyzeComplete("(define x (OPQ number?)) (define y 0) (if (> x 0) (set! y 1) (set! y 2)) (if (=  x 0) (set! y (+ y 1)) (set! y (+ y 2)))",
-                  Set(Integer(4), Integer(3))
+  analyzeComplete(
+    "(define x (OPQ number?)) (define y 0) (if (> x 0) (set! y 1) (set! y 2)) (if (=  x 0) (set! y (+ y 1)) (set! y (+ y 2)))",
+    Set(Integer(4), Integer(3)),
+    name = "example1"
   )
 
   analyzeComplete(

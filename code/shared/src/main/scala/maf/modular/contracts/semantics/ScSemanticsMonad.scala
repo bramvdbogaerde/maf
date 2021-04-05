@@ -3,6 +3,8 @@ package maf.modular.contracts.semantics
 import maf.core.{Environment, Lattice}
 import maf.language.contracts.{ScExp, ScIdentifier, ScNil}
 import maf.core.Identity
+import maf.core.StoreMap
+import maf.core.{Address, BasicEnvironment}
 
 /** This trait provides a monad that aids with defining a big step semantics for soft contract verification */
 trait ScSemanticsMonad extends ScModSemantics { outer =>

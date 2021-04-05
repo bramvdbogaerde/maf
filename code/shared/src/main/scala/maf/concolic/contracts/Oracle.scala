@@ -44,6 +44,7 @@ object Oracle {
   private def getRandom[T](v: IndexedSeq[T]): T =
     v(random.nextInt(v.size))
 
+  // TODO: encode chosen generator in the path condition
   def fromOpq(opq: Opq): Value = {
     val options = opq.refinementSet.flatMap(generators.get(_)).toList
     if (options.size == 0) {
