@@ -1,26 +1,7 @@
-package maf.concolic.contracts
+package maf.concolic.contracts.exploration
 
+import maf.concolic.contracts.{ConcTree, UnexploredNode}
 import maf.language.contracts.ScExp
-
-trait IsWalker {
-
-  /** Finds the next possible path condition if any */
-  def next(): Option[(ScExp, List[Boolean])]
-}
-
-trait ExplorationStrategy {
-  type Walker <: IsWalker
-
-  /**
-   * Start returns a walker that uses the given tree and tree
-   * to generate the next path condition
-   *
-   * @param tree
-   * @param trail
-   * @return
-   */
-  def start(tree: ConcTree, trail: List[Boolean]): Walker
-}
 
 class NearestWalker(tree: ConcTree, private var trail: List[Boolean]) extends IsWalker {
   def next(): Option[(ScExp, List[Boolean])] = {

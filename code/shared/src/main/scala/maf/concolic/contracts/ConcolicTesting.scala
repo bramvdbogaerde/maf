@@ -1,38 +1,19 @@
-package maf.modular.contracts
+package maf.concolic.contracts
 
-import maf.modular.contracts.semantics.ScSharedSemantics
-import maf.language.contracts.ScExp
-import maf.language.contracts.ScLattice
-import maf.core.Identity
-import maf.language.contracts.ScSchemeLattice
-import maf.language.contracts.ScIdentifier
-import maf.language.contracts.lattices.ScConcreteValues
-import maf.language.contracts.lattices.ScConcreteLattice
-import maf.core.Identifier
-import maf.language.scheme.interpreter.ConcreteValues.AddrInfo.VarAddr
-import maf.language.scheme.interpreter.BaseSchemeInterpreter
-import maf.language.scheme.interpreter.ConcreteSchemePrimitives
+import maf.concolic.contracts.exploration.{ExplorationStrategy, Nearest}
+import maf.core.{BasicEnvironment, Identifier, Identity, Position}
 import maf.language.change.CodeVersion
-import maf.language.scheme.SchemeExp
-import maf.language.scheme.interpreter.ConcreteValues
-import maf.util.benchmarks.Timeout
-import maf.language.contracts.ScNil
-import maf.language.scheme.interpreter.IO
-import maf.language.scheme.interpreter.EmptyIO
-import maf.language.scheme.SchemeFuncall
-import maf.core.BasicEnvironment
-import maf.language.scheme.interpreter.ConcreteValues.AddrInfo
-import maf.core.Position
-import maf.modular.contracts.semantics.ScModSemantics
-import maf.concolic.contracts.InputGenerator
 import maf.language.contracts.ScLattice.Opq
-import maf.language.contracts.ScFunctionAp
-import maf.concolic.contracts.ConcTree
-import maf.concolic.contracts.ValueNode
-import maf.concolic.contracts.Nearest
-import maf.concolic.contracts.ExplorationStrategy
-import maf.language.contracts.lattices.ScConcreteValues.GrdValue
-import maf.language.contracts.lattices.ScConcreteValues.ClosureValue
+import maf.language.contracts._
+import maf.language.contracts.lattices.ScConcreteValues.{ClosureValue, GrdValue}
+import maf.language.contracts.lattices.{ScConcreteLattice, ScConcreteValues}
+import maf.language.scheme.interpreter.ConcreteValues.AddrInfo
+import maf.language.scheme.interpreter.ConcreteValues.AddrInfo.VarAddr
+import maf.language.scheme.interpreter._
+import maf.language.scheme.{SchemeExp, SchemeFuncall}
+import maf.modular.contracts.ScAddresses
+import maf.modular.contracts.semantics.{ScModSemantics, ScSharedSemantics}
+import maf.util.benchmarks.Timeout
 
 case class PrimitiveNotFound(name: String) extends Exception {
   override def getMessage(): String =
@@ -41,6 +22,7 @@ case class PrimitiveNotFound(name: String) extends Exception {
 
 object ScConcretePrimitives {
   import ConcreteValues._
+
   import scala.collection.immutable.Nil
 
   object `dependent-contract?` extends SimplePrim {
@@ -135,7 +117,7 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
 
   }
 
-  case class MonadicSchemeInterpreter(var lstore: StoreCache) extends BaseSchemeInterpreter[()] with ConcreteSchemePrimitives {
+  case class MonadicSchemeInterpreter(var lstore: StoreCache) extends BaseSchemeInterpreter[Unit] with ConcreteSchemePrimitives {
     override def run(
         program: SchemeExp,
         timeout: Timeout.T,
@@ -193,7 +175,7 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
     _ <- modifyStoreCache { store => store.copy(map = store.map ++ interop.lstore.map) }
   } yield PS(result, ScFunctionAp.primitive(p.f.name, args.map(_.v.symbolic), Identity.none))
 
-  override def call(clo: ScLattice.Clo[ScConcreteValues.ScAddr], operands: List[PostValue]): ScEvalM[PostValue] = {
+  override def call(clo: ScLattice.Clo[ScConcreteValues.ScAddr], operands: List[PostValue], syntacticOperands: List[ScExp]): ScEvalM[PostValue] = {
     val addresses = clo.parameters.map(p => allocator.allocVar(p))
     val names = clo.parameters.map(_.name)
     local(
@@ -261,10 +243,10 @@ abstract class ConcolicTesting(
   def results: List[Value] = _results.filterNot(_ == Value.Nil)
 
   /** Overrides the original `call` to take the maximum recursion depth into account */
-  override def call(clo: ScLattice.Clo[ScConcreteValues.ScAddr], operands: List[PS]): ScEvalM[PS] = unit.flatMap(_ => {
+  override def call(clo: ScLattice.Clo[ScConcreteValues.ScAddr], operands: List[PS], syntacticOperands: List[ScExp]): ScEvalM[PS] = unit.flatMap(_ => {
     if (maxdepth > 0) {
       maxdepth = maxdepth - 1
-      super.call(clo, operands)
+      super.call(clo, operands, syntacticOperands)
     } else {
       error(ConcTree.stackoverflow) >> void
     }
@@ -369,8 +351,6 @@ abstract class ConcolicTesting(
 
     (finalContext.copy(root = root), value.map(_.pure).getOrElse(Value.Nil))
   }
-
-  override def evaluatedValue(value: PostValue): ScEvalM[PostValue] = ???
 
   /**
    * Checks whether the given path condition is satisfiable, and

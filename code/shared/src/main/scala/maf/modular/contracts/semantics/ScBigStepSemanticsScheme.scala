@@ -1,7 +1,8 @@
 package maf.modular.contracts.semantics
-import maf.core.Identity
+import maf.core.{BasicEnvironment, Identity, MayFailBoth, MayFailSuccess, StoreMap}
 import maf.language.contracts.ScLattice._
 import maf.language.contracts.{ScExp, _}
+import maf.language.scheme.lattices.Product2SchemeLattice.StoreWrapper
 import maf.util.benchmarks.Timeout
 import maf.language.sexp.Value
 import maf.modular.contracts._
@@ -55,7 +56,7 @@ trait ScSemantics extends ScAbstractSemanticsMonadAnalysis {
   def primName(p: Prim): String
 
   /** Results in a blaming error */
-  def throwBlameError(blame: Blame): ScEvalM[()]
+  def throwBlameError(blame: Blame): ScEvalM[Unit]
 
   /**
    * A primitve wrapped with its corresponding
@@ -90,7 +91,11 @@ trait ScSemantics extends ScAbstractSemanticsMonadAnalysis {
   def callPrimitive(p: PrimitiveOperator, arg: Argument): ScEvalM[PostValue] = callPrimitive(p, List(arg))
 
   /** Calls the given closure with the given arguments */
-  def call(clo: ScLattice.Clo[Addr], operands: List[PostValue]): ScEvalM[PostValue]
+  def call(
+      clo: ScLattice.Clo[Addr],
+      operands: List[PostValue],
+      syntacticOperands: List[ScExp]
+    ): ScEvalM[PostValue]
 
   /**
    * Looks up the given identifier and returns its address if defined, otherwise allocates an address
@@ -109,12 +114,6 @@ trait ScSemantics extends ScAbstractSemanticsMonadAnalysis {
   }
 
   /**
-   * Auxilary function which serves as a way to identify
-   * fully evaluated values used by the intepreter
-   */
-  def evaluatedValue(v: PostValue): ScEvalM[PostValue]
-
-  /**
    * Returns true if the given path condition is satisfiable
    *
    * @param pc the path condition to solve for
@@ -126,7 +125,7 @@ trait ScSemantics extends ScAbstractSemanticsMonadAnalysis {
 trait ScSharedSemantics extends ScSemantics {
   private lazy val primTrue = primMap("true?")
   private lazy val primFalse = primMap("false?")
-  private lazy val primProc = primMap("procedure?")
+  protected lazy val primProc = primMap("procedure?")
   private lazy val primDep = primMap("dependent-contract?")
   private lazy val primCar = primMap("car")
   private lazy val primCdr = primMap("cdr")
@@ -172,7 +171,7 @@ trait ScSharedSemantics extends ScSemantics {
   /** Creates a fresh identifier for the given opaque value */
   def fresh(v: Val): PostValue = if (lattice.isDefinitelyOpq(v)) value(v, ScModSemantics.freshIdent) else value(v, ScNil())
 
-  def writeLocalForce(addr: Addr, value: PostValue): ScEvalM[()] =
+  def writeLocalForce(addr: Addr, value: PostValue): ScEvalM[Unit] =
     addToCache(addr -> value)
 
   def readPure(addr: Addr, storeCache: StoreCache): Val =
@@ -273,7 +272,7 @@ trait ScSharedSemantics extends ScSemantics {
     } yield monitoredFunction
 
   def evalProgram(expressions: List[ScExp]): ScEvalM[PostValue] = {
-    def addBinding(name: ScIdentifier): ScEvalM[()] =
+    def addBinding(name: ScIdentifier): ScEvalM[Unit] =
       lookupOrDefine(name) >> unit
 
     for {
@@ -442,7 +441,7 @@ trait ScSharedSemantics extends ScSemantics {
     val cloAp =
       lattice
         .getClosure(operator.pure)
-        .map { clo => call(clo, operands) }
+        .map { clo => call(clo, operands, syntacticOperands) }
 
     // 3. Application of a monitored function (arrow)
     val arrAp = lattice.getArr(operator.pure).map { arr =>
@@ -609,7 +608,7 @@ trait ScSharedSemantics extends ScSemantics {
         if (mustReplacePc) replacePc(pc)(void) else void
     }
 
-  def guardFeasible(op: Prim, value: PostValue): ScEvalM[()] = ifFeasible(op, value)(pure(()))
+  def guardFeasible(op: Prim, value: PostValue): ScEvalM[Unit] = ifFeasible(op, value)(pure(()))
 
   /**
    * Checks whether applying the given primitive to the given value is returns possibly true or not.
@@ -622,7 +621,7 @@ trait ScSharedSemantics extends ScSemantics {
   private def feasible(op: Prim, value: PostValue)(pc: PC): Either[PC, PC] = {
     val newPc = pc.and(ScFunctionAp(ScIdentifier(primName(op), Identity.none), List(value.symbolic), Identity.none))
     value.symbolic match {
-      case _ if !lattice.schemeLattice.isTrue(run(callPrimitive(PrimitiveOperator(op, ScNil()), Argument(value, ScNil())).map(_.pure))) =>
+      case _ if !lattice.schemeLattice.isTrue(run(callPrimitive(PrimitiveOperator(op, ScNil()), Argument(value, ScNil()))).pure) =>
         Left(newPc)
 
       case ScNil(_) =>
@@ -659,92 +658,265 @@ trait ScSharedSemantics extends ScSemantics {
 }
 
 import maf.modular.contracts.domain.ScSchemePrimitives
-trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimitives with ScSchemeSemanticsMonad {
+trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimitives { outer =>
 
-  trait IntraScBigStepSemantics extends IntraScAnalysisScheme with ScSharedSemantics {
+  trait IntraScBigStepSemantics extends IntraScAnalysisScheme with ScSharedSemantics with ScModAnalysisSemanticsMonad {
+
+    /*==================================================================================================================*/
+
+    override type Val = outer.Value
+    override type Addr = outer.Addr
+    override type Prim = outer.Prim
+    override val lattice: ScSchemeLattice[Val, Addr] = outer.lattice
+
+    /*==================================================================================================================*/
+    case class StoreCacheAdapter(cache: StoreCache, globalStore: maf.core.Store[Addr, Value]) extends maf.core.Store[Addr, Value] {
+      def lookup(addr: Addr): Option[Value] =
+        cache.get(addr).map((v: PostValue) => v._1).orElse(if (GLOBAL_STORE_ENABLED) globalStore.lookup(addr) else None)
+
+      /** Add a new entry in the store */
+      def extend(a: Addr, v: Value): maf.core.Store[Addr, Value] = {
+        if (GLOBAL_STORE_ENABLED) {
+          val _ = globalStore.extend(a, v)
+        }
+
+        StoreCacheAdapter(StoreMap(cache + (a -> ((v, ScNil())))), globalStore)
+      }
+    }
+
+    def withStoreCacheAdapter[A](f: StoreCacheAdapter => (A, StoreCacheAdapter)): ScEvalM[A] = AnalysisMonad { context =>
+      val (result, updatedStore) = f(StoreCacheAdapter(context.cache, StoreAdapter))
+      Set((context.copy(cache = updatedStore.cache), result))
+    }
+
+    val allocator: Allocator = new Allocator {
+
+      /** Generic allocation based on identity */
+      override def alloc(idn: Identity): ScBigStepSemanticsScheme.this.Addr = outer.allocGeneric(idn, component)
+
+      /** Allocate a pair in the memory of the machine */
+      override def allocCons(
+          car: PS,
+          cdr: PS,
+          carIdn: Identity,
+          cdrIdn: Identity
+        ): ScEvalM[PS] = ???
+
+      /** Allocates an address for a variable */
+      override def allocVar(id: ScIdentifier): Addr =
+        outer.allocVar(id, context(component))
+
+      /** Allocates an address for a primitive */
+      override def allocPrim(name: String): Addr =
+        ScPrimAddr(name)
+
+      /**
+       * Views an address from the abstract ScAddreses class
+       * as an address for this semanticds
+       */
+      override def view[Context](addr: ScAddresses[Context]): Addr = addr
+    }
+    /*==================================================================================================================*/
+
+    override def primitives: List[String] = outer.primMap.keys.toList
+
+    override def primMap(v: String): Prim = outer.primMap(v)
+
+    override def primName(p: Prim): String = p.name
+
+    override def callPrimitive(p: PrimitiveOperator, args: List[Argument]): ScEvalM[PostValue] = withStoreCacheAdapter { adapter =>
+      p.f
+        .call(p.e, args.map(arg => (arg.e, arg.v.pure)), adapter, this)
+        .map { case (v, store) =>
+          val ps = new PS((v, ScFunctionAp.primitive(p.f.name, args.map(_.e), p.e.idn)))
+          (ps, StoreWrapper.unwrap(store).asInstanceOf[StoreCacheAdapter])
+        }
+        .getOrElse((value(lattice.bottom), adapter))
+    }
+
+    /*==================================================================================================================*/
+
+    override def throwBlameError(blame: Blame): ScEvalM[Unit] =
+      withIgnoredIdentities { ignored =>
+        if (!ignored.contains(blame.blamedPosition)) {
+          writeBlame(blame)
+        }
+        void
+      }
+
+    /*==================================================================================================================*/
+
+    def bindArgs(
+        operands: List[PostValue],
+        params: List[ScParam],
+        syntacticOperands: List[ScExp],
+        context: ComponentContext
+      ): ScEvalM[Unit] =
+      (operands, params) match {
+        case (List(), List()) => unit
+        case (values, List(param @ ScVarArgIdentifier(name, idn))) =>
+          for {
+            listedValues <- allocList(values, syntacticOperands.map(_.idn))
+            _ <- write(allocVar(param, context), listedValues)
+          } yield ()
+
+        case (value :: values, param :: params) =>
+          for {
+            _ <- write(allocVar(param, context), value)
+            _ <- bindArgs(values, params, syntacticOperands.tail, context)
+          } yield ()
+
+        case (_, _) => throw new Exception("Invalid closure application")
+      }
+
+    override def call(
+        clo: Clo[Addr],
+        operands: List[PS],
+        syntacticOperands: List[ScExp]
+      ): ScEvalM[PS] = {
+      val context = allocCtx(clo, operands.map(_.pure), clo.lambda.idn.pos, component)
+      val called = Call(clo.env, clo.lambda, context)
+      val calledComponent = newComponent(called)
+      bindArgs(operands, clo.lambda.variables, syntacticOperands, context)
+        .map(_ => calledComponent)
+        .flatMap(component => {
+          result(call(component))
+        })
+    }
+
+    /*==================================================================================================================*/
+
+    override def lookupOrDefine(identifier: ScIdentifier): ScEvalM[Addr] = withEnv { (env) =>
+      pure(env.lookup(identifier.name).getOrElse {
+        val addr = allocVar(identifier, context(component))
+        addr
+      })
+    }
+
+    def cacheContains(addr: Addr): ScEvalM[Boolean] = withStoreCache { cache =>
+      pure(cache.get(addr).isDefined)
+    }
+
+    def writeLocal(addr: Addr, value: PostValue): ScEvalM[Unit] =
+      // this prevents the local cache to be out of sync with the global store
+      cacheContains(addr).flatMap { (contains) =>
+        if (contains) {
+          // if we already had something in the local cache on the given adress we simply
+          // join that with the new value we got
+          joinInCache(addr, value)
+        } else if (GLOBAL_STORE_ENABLED) {
+          // if the cache did not contain a value yet, then it might be in the global
+          // store (that is, if we are using one)
+          joinInCache(addr, (readAddr(addr), ScNil()))
+            .flatMap(_ => joinInCache(addr, value))
+        } else {
+          throw new Exception(s"value should have been in  the cache but was not at addr $addr")
+        }
+      }
+
+    override def write(addr: Addr, value: PS): ScEvalM[Unit] =
+      for {
+        _ <- effectful(if (GLOBAL_STORE_ENABLED) writeAddr(addr, value._1))
+        _ <- writeLocal(addr, value)
+      } yield ()
+
+    override def writeLocalForce(addr: Addr, value: PostValue): ScEvalM[Unit] =
+      addToCache(addr -> value)
+
+    override def writeForce(addr: Addr, value: PS): ScEvalM[Unit] =
+      for {
+        _ <- effectful(if (GLOBAL_STORE_ENABLED) forceWrite(addr, value._1))
+        _ <- writeLocalForce(addr, value)
+      } yield ()
+
+    /*==================================================================================================================*/
+
+    override def solve(pc: PC): Boolean =
+      outer.newSmtSolver(pc).isSat
+
+    /*==================================================================================================================*/
 
     /**
      * Compute the context of the current component
+     *
      * @return a new context based on the environment of the component under analysis
      */
     def initialContext: Context = {
-      //var storeCache: StoreCache = componentStore.view.mapValues(v => (v, ScNil())).toMap
+      var storeCache: StoreCache = StoreMap(componentStore.view.mapValues(v => PS((v, ScNil()))).toMap)
 
-      //primBindings.foreach { case (name, addr) =>
-      //  val value = readPure(addr, storeCache)
-      //  storeCache = storeCache + (addr -> ((value, ScIdentifier(name, Identity.none))))
-      //  storeCache += (ScPrimAddr(name) -> ((lattice.schemeLattice.primitive(name), ScIdentifier(name, Identity.none))))
-      //}
+      // bind the primitives to their symbolic counterparts in the store
+      primBindings.foreach { case (name, addr) =>
+        val value = readPure(addr, storeCache)
+        storeCache = StoreMap(storeCache + (addr -> ((value, ScIdentifier(name, Identity.none)))))
+        storeCache = StoreMap(storeCache.map + (ScPrimAddr(name) -> ((lattice.schemeLattice.primitive(name), ScIdentifier(name, Identity.none)))))
+      }
 
-      //fnEnv.mapAddrs { (addr) =>
-      //  val value = readPure(addr, storeCache)
-      //  if (lattice.isDefinitelyOpq(value)) {
-      //    storeCache += (addr -> ((value, ScIdentifier(ScModSemantics.genSym, Identity.none))))
-      //  }
-      //  addr
-      //}
+      fnEnv.mapAddrs { (addr) =>
+        val value = readPure(addr, storeCache)
+        if (lattice.isDefinitelyOpq(value)) {
+          storeCache = StoreMap(storeCache.map + (addr -> ((value, ScIdentifier(ScModSemantics.genSym, Identity.none)))))
+        }
+        addr
+      }
 
-      //Context(env = fnEnv, cache = storeCache, pc = ScNil())
-      ???
+      Context(env = fnEnv, cache = storeCache, pc = ScNil())
     }
 
     /**
      * Inject refinements in the store based on the contract of the function being
      * called, this is only possible when the compoennt is a GuardedFunctionCall
      */
-    def injectRefinements: ScEvalM[()] = ???
-    //view(component) match {
-    //  case GuardedFunctionCall(domainContracts, _, _, _, _, _) =>
-    //    // retrieve the list of addresses for the parameters of this function
-    //    val variables = fnParams
-    //    // now we refine these variables, and make their symbolic representation
-    //    // equal to the application of its contract (if available)
-    //    val refinements = domainContracts.zip(variables).map { case (addr, variable) =>
-    //      for {
-    //        contract <- read(addr)
-    //        param <- read(variable)
-    //        // TODO: check whether other type of contracts can also be used for refinements
-    //        _ <- ifFeasible(primProc, contract) {
-    //          checkFlat(contract, param)
-    //        }
-    //      } yield ()
-    //    }
+    def injectRefinements: ScEvalM[Unit] =
+      view(component) match {
+        case GuardedFunctionCall(domainContracts, _, _, _, _, _) =>
+          // retrieve the list of addresses for the parameters of this function
+          val variables = fnParams
+          // now we refine these variables, and make their symbolic representation
+          // equal to the application of its contract (if available)
+          val refinements = domainContracts.zip(variables).map { case (addr, variable) =>
+            for {
+              contract <- read(addr)
+              param <- read(variable)
+              // TODO: check whether other type of contracts can also be used for refinements
+              _ <- ifFeasible(primProc, contract) {
+                checkFlat(contract, param)
+              }
+            } yield ()
+          }
 
-    //    sequence(refinements) >> unit
-    //  case _ => unit
-    //}
+          sequence(refinements) >> unit
+        case _ => unit
+      }
 
     /**
      * This function checks that the given value adheres to the range contract of the
      * current function (if it is a guarded function call)
      */
-    //def checkRangeContract(v: PostValue): ScEvalM[PostValue] = view(component) match {
-    //  case gf: GuardedFunctionCall[_] =>
-    //    for {
-    //      contract <- read(gf.rangeContract)
-    //      _ <- applyMon(contract, v, gf.rangeIdentity, gf.lambda.idn)
-    //    } yield v
-    //  case _ => pure(v)
-    //}
+    def checkRangeContract(v: PostValue): ScEvalM[PostValue] = view(component) match {
+      case gf: GuardedFunctionCall[_] =>
+        for {
+          contract <- read(gf.rangeContract)
+          _ <- applyMon(contract, v, gf.rangeIdentity, gf.lambda.idn)
+        } yield v
+      case _ => pure(v)
+    }
 
-    def analyze(_ignored_timeout: Timeout.T): Unit = ???
-    //    totalRuns += 1
-    //    if (totalRuns > 100) {
-    //      throw new Exception("Timeout exceeded")
-    //    }
+    def analyzeWithTimeout(timeout: Timeout.T): Unit = {
+      if (timeout.reached) {
+        throw new Exception("Timeout exceeded")
+      }
 
-    //    println("================================")
-    //    println(s"Analyzing component $component")
+      println("================================")
+      println(s"Analyzing component $component")
 
-    //    val computation = (injectRefinements >> eval(fnBody) >>= checkRangeContract)
-    //    val (value, sstore, _) = compute(computation)(initialContext)
-    //    writeReturnStore(sstore)
-    //    writeResult(value, component)
+      val computation = (injectRefinements >> eval(fnBody) >>= checkRangeContract)
+      val (value, sstore, _) = compute(computation)(initialContext)
+      //writeReturnStore(sstore)
+      writeResult(value, component)
 
-    //    println(s"Return value $value")
-    //    println("==================================")
-    //  }
-    //}
+      println(s"Return value $value")
+      println("==================================")
+    }
   }
 
 }

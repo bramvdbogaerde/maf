@@ -14,6 +14,6 @@ class ScSMTSolverWeb extends ScSmtSolver {
 class ScTestAnalysisWeb(prog: ScExp) extends ScTestAnalysis(prog) {
   override val GLOBAL_STORE_ENABLED: Boolean = false
   override type SMTSolver = ScSMTSolverWeb
-  override def newSmtSolver(program: PC): ScSMTSolverWeb =
+  override def newSmtSolver(program: ScExp): ScSMTSolverWeb =
     new ScSMTSolverWeb()
 }

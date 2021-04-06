@@ -1,13 +1,11 @@
 package maf.language.contracts
 
-import maf.core.{Address, Environment, Identity, Lattice}
+import maf.core.{Address, BasicEnvironment, Environment, Identity, Lattice, LatticeTopUndefined, MayFail, Primitive}
 import maf.language.scheme.lattices.SchemeLattice
-import maf.core.Primitive
 import maf.lattice.interfaces.BoolLattice
-import maf.core.LatticeTopUndefined
+
 import javax.management.ValueExp
 import maf.language.contracts.lattices.ScOp
-import maf.core.MayFail
 import maf.language.scheme.primitives.SchemePrimitive
 
 object ScLattice {
@@ -25,7 +23,7 @@ object ScLattice {
    */
   case class Clo[Addr <: Address](
       idn: Identity,
-      env: Environment[Addr],
+      env: BasicEnvironment[Addr],
       parameters: List[ScIdentifier],
       lambda: ScLambda,
       pc: ScExp = ScNil(),

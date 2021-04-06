@@ -1,11 +1,10 @@
 package maf.modular.contracts.semantics
 
 import maf.core.Position.Position
-import maf.core.{Address, Environment, Identity}
+import maf.core.{Address, BasicEnvironment, Environment, Identity, Lattice}
 import maf.language.contracts.ScLattice.Blame
 import maf.language.contracts.{ScExp, ScIdentifier, ScLambda, ScLattice, ScParam}
 import maf.modular.{DestructiveStore, GlobalStore, LocalStore, LocalStoreMap, ModAnalysis, ReturnAddr, ReturnValue}
-import maf.core.Lattice
 import maf.lattice.interfaces.BoolLattice
 import maf.language.contracts.ScSchemeDomain
 import maf.language.scheme.primitives.SchemeInterpreterBridge
@@ -14,171 +13,10 @@ import maf.language.scheme.SchemeLambdaExp
 import maf.language.CScheme.TID
 import maf.language.scheme.primitives.SchemePrimitive
 import maf.language.contracts.ScNil
-
 import maf.modular.contracts._
 import maf.modular.contracts.domain._
 import maf.modular.contracts.analyses._
-import maf.core.StoreMap
-import maf.core.BasicEnvironment
 
-trait ScModAnalysisSemanticsMonad extends ScModSemanticsScheme with ScAbstractSemanticsMonadAnalysis {
-  override type Addr = super[ScModSemanticsScheme].Addr;
-  override type Env = super[ScModSemanticsScheme].Env;
-  override type StoreCache = StoreMap[Addr, PostValue]
-  override type M[X] = AnalysisMonad[X]
-  override type PostValue = (Val, ScExp)
-  override type Val = super[ScModSemanticsScheme].Value;
-
-  case class Context(
-      env: BasicEnvironment[Addr],
-      pc: PC,
-      cache: StoreCache,
-      ignoredIdn: List[Identity] = List()) {
-    def store: Store = ??? // cache.view.mapValues(_.pure).toMap
-  }
-  case class AnalysisMonad[X](run: Context => Set[(Context, X)])
-  override def abstractMonadInstance: ScAbstractSemanticsMonad[M] = new ScAbstractSemanticsMonad[AnalysisMonad] {
-
-    override def pure[X](v: => X): AnalysisMonad[X] =
-      AnalysisMonad((context) => List((context, v)).toSet)
-
-    override def flatMap[X, Y](m: AnalysisMonad[X], f: X => AnalysisMonad[Y]): AnalysisMonad[Y] =
-      AnalysisMonad((context) =>
-        m.run(context).flatMap { case (updatedContext, value) =>
-          f(value).run(updatedContext)
-        }
-      )
-
-    override def void[X]: M[X] =
-      AnalysisMonad((context) => Set[(Context, X)]())
-  }
-
-  implicit def fromStoreCache(store: StoreCache): Map[Addr, PostValue] =
-    store.map
-
-  implicit def toStoreCache(store: Map[Addr, PostValue]): StoreCache =
-    StoreMap(store)
-
-  implicit def toScEvalMonad[X](analysisMonad: AnalysisMonad[X]): ScEvalM[X] =
-    ScEvalM(analysisMonad)
-
-  def withIgnoredIdentities(f: List[Identity] => Unit): ScEvalM[()] =
-    withContext(context => effectful(f(context.ignoredIdn)))
-
-  def withContext[X](f: Context => ScEvalM[X]): ScEvalM[X] =
-    AnalysisMonad((context) => f(context).m.run(context))
-
-  def addIgnored(idns: Iterable[Identity]): ScEvalM[()] = AnalysisMonad { (context) =>
-    List((context.copy(ignoredIdn = context.ignoredIdn ++ idns), ())).toSet
-  }
-
-  def withEnv[B](f: Environment[Addr] => ScEvalM[B]): ScEvalM[B] =
-    AnalysisMonad((context) => f(context.env).m.run(context))
-
-  def modifyEnv(f: BasicEnvironment[Address] => BasicEnvironment[Address]): ScEvalM[Unit] =
-    AnalysisMonad[()]((context) => List((context.copy(env = f(context.env)), ())).toSet)
-
-  def nondet[X](t: ScEvalM[X], f: ScEvalM[X]): ScEvalM[X] = AnalysisMonad { (context) =>
-    val resF = f.m.run(context)
-    val resT = t.m.run(context)
-    resF ++ resT
-  }
-
-  def nondets[X](s: Set[ScEvalM[X]]): ScEvalM[X] = AnalysisMonad { (context) =>
-    s.flatMap(_.m.run(context))
-  }
-
-  def withPc[X](f: PC => X): ScEvalM[X] = AnalysisMonad { (context: Context) =>
-    Set((context, f(context.pc)))
-  }
-
-  def withStoreCache[X](f: StoreCache => ScEvalM[X]): ScEvalM[X] = AnalysisMonad { (context) =>
-    f(context.cache).m.run(context)
-  }
-
-  /**
-   * Returns a computation that applies the given function on the current store cache
-   * and expects a tuple of a value and a new store cache
-   */
-  def withStoreCacheExplicit[X](f: StoreCache => (X, StoreCache)): ScEvalM[X] = ???
-
-  def joinInCache(addr: Addr, value: PostValue): ScEvalM[()] = AnalysisMonad { (context) =>
-    Set(
-      (
-        (context.copy(cache = context.cache.updated(addr, (lattice.join(context.store.getOrElse(addr, lattice.bottom), value._1), value._2)))),
-        ()
-      )
-    )
-  }
-
-  /**
-   * Given a computation that yields states that contain sets of values, this operator yields a single computation
-   * that gives rises to a state for every element in the given set.
-   */
-  def options[X](c: ScEvalM[Set[X]]): ScEvalM[X] = AnalysisMonad((context) =>
-    c.m.run(context).flatMap { case (updatedContext, set) =>
-      set.map((updatedContext, _))
-    }
-  )
-
-  /**
-   * Action that prints the current store as a table
-   * to the screen. Useful for debugging.
-   */
-  def printStore: ScEvalM[()] = withStoreCache { store =>
-    import maf.util.StoreUtil._
-    println(store.map.asTable.prettyString())
-    unit
-  }
-
-  def evict(addresses: List[Addr]): ScEvalM[()] = AnalysisMonad { context =>
-    Set((context.copy(cache = context.cache.removedAll(addresses)), ()))
-  }
-
-  def readSafe(addr: Addr): ScEvalM[PostValue] = withStoreCache { store =>
-    pure(store.get(addr).getOrElse((lattice.bottom, ScNil())))
-  }
-
-  /**
-   * Writes the given value to the given address
-   *
-   * @param addr  the address to write the value to
-   * @param value the value to write to the given address
-   * @return a computation that writes the given value to the address
-   */
-  override def write(addr: Addr, value: PostValue): ScEvalM[Unit] = ???
-
-  /** Forcefully write to the store */
-  override def writeForce(addr: Addr, value: PostValue): ScEvalM[Unit] = ???
-
-  override def evaluatedValue(value: PostValue): ScEvalM[PostValue] = pure(value)
-
-  def compute(c: ScEvalM[PostValue])(context: Context): (Value, Store, List[ScExp]) = {
-    // TODO: this looks a lot like mergedPC, see if we can abstract this away a bit
-
-    import maf.lattice.MapLattice._
-    val result = c.m.run(context)
-
-    // optimisation: if the number of output states is one, then we don't need to merge anything
-    if (result.size == 1) {
-      val (context, (v, s)) = result.head
-      (v, context.store, List(s))
-    } else {
-      result.foldLeft[(Value, Store, List[ScExp])]((lattice.bottom, Lattice[Store].bottom, List()))((acc, v) =>
-        v match {
-          case (context, (l, s)) =>
-            (lattice.join(acc._1, l), Lattice[Store].join(acc._2, context.store), s :: acc._3)
-        }
-      )
-    }
-  }
-
-  /** Run the given computation without any initial context */
-  override def run(c: ScEvalM[PostValue]): PostValue = {
-    val (v, _, _) = compute(c)(Context(env = BasicEnvironment(Map()), pc = ScNil(), cache = StoreMap(Map())))
-    (v, ScNil())
-  }
-}
 object ScModSemanticsScheme {
   var r = 0
   def genSym: String = {
@@ -243,7 +81,7 @@ trait ScModSemanticsScheme
   }
 
   /** The environment in which the analysis is executed */
-  type Env = Environment[Address]
+  type Env = BasicEnvironment[Address]
 
   /** The type of a call component creator */
   type CreateCallComponent = (Env, ScLambda, ComponentContext) => Call[ComponentContext]

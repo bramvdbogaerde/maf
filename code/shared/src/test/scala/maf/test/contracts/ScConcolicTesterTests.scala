@@ -2,16 +2,15 @@ package maf.test.contracts
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should
-import maf.modular.contracts.ConcolicTesting
 import maf.language.contracts.ScExp
 import maf.language.scheme.interpreter.ConcreteValues
 import maf.language.contracts.SCExpCompiler
-import maf.concolic.contracts.Oracle
+import maf.concolic.contracts.{ConcTree, ConcolicTesting, Oracle}
 import maf.language.scheme.interpreter.ConcreteValues.Value
 import maf.modular.contracts.semantics.ScModSemantics
+
 import java.io.PrintWriter
 import java.io.File
-import maf.concolic.contracts.ConcTree
 import maf.language.contracts.ScPrelude
 
 trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {

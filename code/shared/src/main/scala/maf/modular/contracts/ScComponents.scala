@@ -1,6 +1,6 @@
 package maf.modular.contracts
 
-import maf.core.{Address, Environment, Identity}
+import maf.core.{Address, BasicEnvironment, Environment, Identity}
 import maf.language.contracts.{ScExp, ScLambda}
 import maf.modular.LocalStoreMap
 import maf.modular.contracts.semantics._
@@ -11,7 +11,7 @@ sealed trait ScComponent extends Serializable
 case object ScMain extends ScComponent
 
 trait Call[Context] extends ScComponent {
-  val env: Environment[Address]
+  val env: BasicEnvironment[Address]
   val lambda: ScLambda
   val context: Context
 
@@ -20,13 +20,13 @@ trait Call[Context] extends ScComponent {
 
 object Call {
   def apply[Context](
-      env: Environment[Address],
+      env: BasicEnvironment[Address],
       lambda: ScLambda,
       context: Context
     ): Call[Context] =
     RegularCall(env, lambda, context)
 
-  def unapply[Context](any: Any): Option[(Environment[Address], ScLambda, Context)] = any match {
+  def unapply[Context](any: Any): Option[(BasicEnvironment[Address], ScLambda, Context)] = any match {
     case c: Call[Context] => Some((c.env, c.lambda, c.context))
     case _                => None
   }
@@ -39,7 +39,7 @@ object Call {
  * @tparam Context the context of the call
  */
 case class RegularCall[Context](
-    env: Environment[Address],
+    env: BasicEnvironment[Address],
     lambda: ScLambda,
     context: Context)
     extends Call[Context]
@@ -55,7 +55,7 @@ case class GuardedFunctionCall[Context](
     domainContracts: List[Address],
     rangeContract: Address,
     rangeIdentity: Identity,
-    env: Environment[Address],
+    env: BasicEnvironment[Address],
     lambda: ScLambda,
     context: Context)
     extends Call[Context]
@@ -63,7 +63,7 @@ case class GuardedFunctionCall[Context](
 case class ContractCall[Context](
     monIdentity: Identity,
     blamedParty: Identity,
-    env: Environment[Address],
+    env: BasicEnvironment[Address],
     lambda: ScLambda,
     context: Context)
     extends Call[Context]
@@ -72,7 +72,7 @@ case class CallWithStore[Context, Addr, Value](
     call: Call[Context],
     store: LocalStoreMap[Addr, Value])
     extends Call[Context] {
-  override val env: Environment[Address] = call.env
+  override val env: BasicEnvironment[Address] = call.env
   override val lambda: ScLambda = call.lambda
   override val context: Context = call.context
 

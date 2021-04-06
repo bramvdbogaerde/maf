@@ -28,7 +28,7 @@ trait ScTests extends AnyFlatSpec with should.Matchers {
     val GLOBAL_STORE_ENABLED = false
 
     type SMTSolver = ScSmtSolver
-    override def newSmtSolver(program: PC): SMTSolver =
+    override def newSmtSolver(program: ScExp): SMTSolver =
       throw new Exception("no SMT solver found.")
   }
 

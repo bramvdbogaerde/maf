@@ -1,14 +1,10 @@
-package maf.modular.contracts
+package maf.concolic.contracts
 
-import maf.modular.contracts.semantics._
-import maf.language.contracts.ScExp
-import maf.core.Store
-import maf.core.BasicEnvironment
-import maf.core.Identity
+import maf.core.{BasicEnvironment, Identity, Store}
 import maf.language.contracts.lattices.ScConcreteValues
+import maf.language.contracts.{ScExp, ScNil}
 import maf.language.scheme.interpreter.ConcreteValues
-import maf.concolic.contracts._
-import maf.language.contracts.ScNil
+import maf.modular.contracts.semantics._
 
 trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   case class ConcolicStore(map: Map[Addr, PostValue]) extends Store[Addr, PostValue] {
@@ -55,7 +51,7 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
 
   case class PS(pure: Val, symbolic: ScExp) extends IsPostValue
 
-  def modifyTree(f: ConcTree => ConcTree): ScEvalM[()] = ConcolicMonad { context =>
+  def modifyTree(f: ConcTree => ConcTree): ScEvalM[Unit] = ConcolicMonad { context =>
     (context.copy(root = f(context.root)), Some(()))
   }
 
@@ -63,17 +59,17 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   override type PostValue = PS
   override type StoreCache = ConcolicStore
   override type Val = ConcreteValues.Value
-  override type ConcreteStore = StoreCache
+  type ConcreteStore = StoreCache
   override type Env = BasicEnvironment[Addr]
   override type Addr = ScConcreteValues.ScAddr
 
-  override def modifyPC(f: PC => PC): ScEvalM[()] = ConcolicMonad { context =>
+  override def modifyPC(f: PC => PC): ScEvalM[Unit] = ConcolicMonad { context =>
     val newPc = f(context.pc)
     // TODO: remove redundant pc variable in the state
     (context.copy(pc = newPc), Some(()))
   }
 
-  override def modifyEnv(f: Env => Env): ScEvalM[()] = ConcolicMonad { context =>
+  override def modifyEnv(f: Env => Env): ScEvalM[Unit] = ConcolicMonad { context =>
     (context.copy(env = f(context.env)), Some(()))
   }
 
@@ -210,7 +206,7 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   }
 
   // Same as addToCache since we are not in an abstract domain
-  override def joinInCache(addr: Addr, value: PostValue): ScEvalM[()] = addToCache((addr, value))
+  override def joinInCache(addr: Addr, value: PostValue): ScEvalM[Unit] = addToCache((addr, value))
 
   override def options[X](c: ScEvalM[Set[X]]): ScEvalM[X] = ConcolicMonad { context =>
     c.m.run(context) match {
@@ -221,9 +217,9 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
     }
   }
 
-  override def printStore: ScEvalM[()] = ???
+  override def printStore: ScEvalM[Unit] = ???
 
-  override def write(addr: Addr, value: PostValue): ScEvalM[()] = modifyStoreCache { cache =>
+  override def write(addr: Addr, value: PostValue): ScEvalM[Unit] = modifyStoreCache { cache =>
     cache.update(addr, value).asInstanceOf[StoreCache]
   }
 
@@ -235,15 +231,15 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   }
 
   /** Forcefully write to the store */
-  def writeForce(addr: Addr, value: PostValue): ScEvalM[()] = write(addr, value)
+  def writeForce(addr: Addr, value: PostValue): ScEvalM[Unit] = write(addr, value)
 
-  def addSymbolicVariable(variable: String): ScEvalM[()] = unit // TODO
+  def addSymbolicVariable(variable: String): ScEvalM[Unit] = unit // TODO
 
   def withInputGenerator[A](f: InputGenerator => ScEvalM[A]): ScEvalM[A] = ConcolicMonad { context =>
     f(context.inputGenerator).m.run(context)
   }
 
-  def error[A](f: PC => ConcTree): ScEvalM[()] = ConcolicMonad { context =>
+  def error[A](f: PC => ConcTree): ScEvalM[Unit] = ConcolicMonad { context =>
     // only allow modification when we are replacing an unexplored node
     val newRoot = context.root.replaceAt(context.trail.reverse, f(context.pc))
     (context.copy(root = newRoot, error = true), Some(()))
@@ -254,7 +250,7 @@ trait ConcolicMonadAnalysis extends ScAbstractSemanticsMonadAnalysis {
   }
 
   /** Run the given computation without any initial context */
-  def run[A](c: ScEvalM[A]): A =
+  def run(c: ScEvalM[PostValue]): PostValue =
     c.m
       .run(
         ConcolicContext(

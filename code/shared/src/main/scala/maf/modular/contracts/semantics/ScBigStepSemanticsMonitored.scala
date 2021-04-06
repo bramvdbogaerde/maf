@@ -9,8 +9,6 @@ import maf.language.contracts._
  */
 trait ScBigStepSemanticsMonitored extends ScBigStepSemanticsScheme {
 
-  import ScEvalM._
-
   /** Keeps track of how many contracts where checked */
   var contractApplications: Int = 0
 
@@ -39,7 +37,7 @@ trait ScBigStepSemanticsMonitored extends ScBigStepSemanticsScheme {
   trait IntraScBigStepSemanticsMonitored extends IntraScBigStepSemantics {
     override def analyzeWithTimeout(_ignored_timeout: Timeout.T): Unit = {
       analysedComponents += 1
-      super.analyze(_ignored_timeout)
+      super.analyzeWithTimeout(_ignored_timeout)
     }
 
     /*

@@ -7,7 +7,7 @@ object ConcolicTesting {
   object Evaluator extends TinyRepl.Evaluator {
 
     override def eval(sc: ScExp): Any = {
-      val analysis = new maf.modular.contracts.ConcolicTesting(sc) {
+      val analysis = new maf.concolic.contracts.ConcolicTesting(sc) {
 
         def isSat(exp: ScExp): Option[Map[String, Val]] = ???
       }

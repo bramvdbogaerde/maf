@@ -87,9 +87,6 @@ trait ScAbstractSemanticsMonadAnalysis {
    */
   type Env = BasicEnvironment[Addr]
 
-  /** A concrete store */
-  type ConcreteStore
-
   /** An instance of the monad typeclass */
   def abstractMonadInstance: ScAbstractSemanticsMonad[M]
 
@@ -341,7 +338,7 @@ trait ScAbstractSemanticsMonadAnalysis {
   def writeForce(addr: Addr, value: PostValue): ScEvalM[()]
 
   /** Run the given computation without any initial context */
-  def run[A](c: ScEvalM[A]): A
+  def run(c: ScEvalM[PostValue]): PostValue
 
   // TODO: again this refers to components and allocations, this should reside elsewhere
   //def extended[X](ident: ScIdentifier, component: Component)(c: Addr => ScEvalM[X]): ScEvalM[X] =

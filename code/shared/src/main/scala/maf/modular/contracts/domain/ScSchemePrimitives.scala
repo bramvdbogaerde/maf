@@ -2,9 +2,8 @@ package maf.modular.contracts.domain
 
 import maf.modular.contracts.semantics._
 import maf.modular.contracts._
-
-import maf.core.{Environment, Identity}
-import maf.language.contracts.{ScExp}
+import maf.core.{BasicEnvironment, Environment, Identity}
+import maf.language.contracts.ScExp
 import maf.language.contracts.ScLattice.{Arr, Grd, Thunk}
 import maf.modular.GlobalStore
 
@@ -105,7 +104,7 @@ trait ScSchemePrimitives extends ScModSemanticsScheme with GlobalStore[ScExp] {
     primitives.keys.map(name => (name, ScMonitoredPrimAddr(name))) ++
       otherPrimitives.map(name => (name, ScPrimAddr(name)))
 
-  def baseEnv: Env = Environment(primBindings)
+  def baseEnv: Env = BasicEnvironment(primBindings.toMap)
   def setup(): Unit = {
     println("Setting up analysis")
     setupMonitoredPrimitives()
