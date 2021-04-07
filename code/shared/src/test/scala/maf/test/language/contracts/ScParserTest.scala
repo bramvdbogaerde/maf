@@ -184,4 +184,15 @@ class ScParserTest extends AnyFlatSpec with should.Matchers {
     compile("(-> x y)") should matchPattern { case ScHigherOrderContract(ScIdentifier("x", _), ScIdentifier("y", _), _) =>
     }
   }
+
+  "An assumed expression" should "be parsed to ScAssume" in {
+    compile("(assumed name pure f)") should matchPattern {
+      case ScAssumed(ScIdentifier("name", _), ScIdentifier("pure", _), ScIdentifier("f", _), _) =>
+    }
+  }
+
+  "A given expression" should "be parsed to ScGiven" in {
+    compile("(given name f)") should matchPattern { case ScGiven(ScIdentifier("name", _), ScIdentifier("f", _), _) =>
+    }
+  }
 }

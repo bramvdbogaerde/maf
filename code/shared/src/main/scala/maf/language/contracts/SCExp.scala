@@ -32,6 +32,8 @@ case object CONS extends Label
 case object CAR extends Label
 case object CDR extends Label
 case object VARARG_IDENTIFIER extends Label
+case object ASSUMED extends Label
+case object GIVEN extends Label
 
 /** A language for defining software contracts */
 trait ScExp extends SchemeExp {
@@ -450,6 +452,47 @@ case class ScOpaque(idn: Identity, refinement: Set[String]) extends ScExp {
 
   override def toString: String =
     if (refinement.nonEmpty) s"(OPQ ${refinement.mkString(" ")}" else "OPQ"
+}
+
+/** An assertion that must hold for the assumption to be valid */
+case class ScGiven(
+    name: ScIdentifier,
+    expression: ScExp,
+    idn: Identity)
+    extends ScExp {
+
+  override def fv: Set[String] = expression.fv
+
+  override def label: Label = GIVEN
+
+  override def subexpressions: List[Expression] = List(expression)
+
+}
+
+/**
+ * An assumption of the form:
+ *
+ * (assumed name simpleContract exression)
+ *
+ * Example:
+ *
+ * (define f (assumed simple-f-pure pure f))
+ * (f)
+ * (given simple-f (= x old-x))
+ */
+case class ScAssumed(
+    name: ScIdentifier,
+    simpleContract: ScExp,
+    expression: ScExp,
+    idn: Identity)
+    extends ScExp {
+
+  override def fv: Set[String] = expression.fv
+
+  override def label: Label = ASSUMED
+
+  override def subexpressions: List[Expression] = List(expression)
+
 }
 
 /**

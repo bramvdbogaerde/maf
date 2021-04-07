@@ -151,6 +151,15 @@ object SCExpCompiler {
       ScHigherOrderContract(domainCompiled, rangeCompiled, prog.idn)
      */
 
+    case (Ident("assumed") :: IdentWithIdentity(name, nameIdn) :: simpleContract :: expr :: ListNil(_)) =>
+      val compiledSimpleContract = compile(simpleContract)
+      val compiledExpr = compile(expr)
+      ScAssumed(ScIdentifier(name, nameIdn), compiledSimpleContract, compiledExpr, prog.idn)
+
+    case (Ident("given") :: IdentWithIdentity(name, nameIdn) :: expr :: ListNil(_)) =>
+      val compiledExpr = compile(expr)
+      ScGiven(ScIdentifier(name, nameIdn), compiledExpr, prog.idn)
+
     case (Ident("~>") | Ident("->")) :: contracts =>
       val compiledContracts = compile_fn_contracts(contracts)
       val domainContracts = compiledContracts.init
