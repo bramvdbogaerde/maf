@@ -131,6 +131,11 @@ object ConcTree {
     pc
   )
 
+  def assumptionViolated(name: String)(pc: ScExp): ConcTree = ErrorNode(
+    error = s"Assumption violated ${name}",
+    pc
+  )
+
   def toDot(tree: ConcTree, writer: PrintWriter): Unit = {
     writer.write("digraph G {\n")
     //writer.write("rankdir = \"LR\"\n")

@@ -175,7 +175,11 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
     _ <- modifyStoreCache { store => store.copy(map = store.map ++ interop.lstore.map) }
   } yield PS(result, ScFunctionAp.primitive(p.f.name, args.map(_.v.symbolic), Identity.none))
 
-  override def call(clo: ScLattice.Clo[ScConcreteValues.ScAddr], operands: List[PostValue], syntacticOperands: List[ScExp]): ScEvalM[PostValue] = {
+  override def call(
+      clo: ScLattice.Clo[ScConcreteValues.ScAddr],
+      operands: List[PostValue],
+      syntacticOperands: List[ScExp]
+    ): ScEvalM[PostValue] = {
     val addresses = clo.parameters.map(p => allocator.allocVar(p))
     val names = clo.parameters.map(_.name)
     local(
@@ -211,6 +215,31 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
   }
 
   /**
+   * Throw an error that the assumption has failed.
+   *
+   * @param name the name of the assumption that is violated
+   * @param idn the identity of the assertion that must have been valid for the assumption
+   * to be valid
+   */
+  protected def throwAssumptionFailure(name: ScIdentifier, idn: Identity): ScEvalM[Unit] =
+    error(ConcTree.assumptionViolated(name.name))
+
+  override def evalGiven(
+      name: ScIdentifier,
+      expr: ScExp,
+      idn: Identity
+    ): ScEvalM[PostValue] =
+    eval(expr).flatMap(value => cond(value, result(lattice.schemeLattice.nil), throwAssumptionFailure(name, idn) >> void))
+
+  /** In the concrete execution, this does not have any effects */
+  override def evalAssumed(
+      name: ScIdentifier,
+      simpleContract: ScExp,
+      expr: ScExp,
+      idn: Identity
+    ): ScEvalM[PostValue] = eval(expr)
+
+  /**
    * Solves the given path condition and returns true if it is satisfiable, as we only work with concrete values
    * in concolic testing, there is no need to check the path conditions at runtime, hence, we only check them when
    * we explore the state space
@@ -237,13 +266,25 @@ abstract class ConcolicTesting(
   private var _results: List[Value] = List()
   private var _tree: ConcTree = ConcTree.empty
   private var maxdepth = defaultMaxDepth
+
+  /** A map from assumption names to location where they were violated */
+  private var assumptionViolations: Map[String, Identity] = Map()
   private val root: maf.concolic.contracts.ConcTree = maf.concolic.contracts.ConcTree.empty
 
   def tree: ConcTree = _tree
   def results: List[Value] = _results.filterNot(_ == Value.Nil)
 
+  override protected def throwAssumptionFailure(name: ScIdentifier, idn: Identity): ScEvalM[Unit] = {
+    assumptionViolations += (name.name -> idn)
+    super.throwAssumptionFailure(name, idn)
+  }
+
   /** Overrides the original `call` to take the maximum recursion depth into account */
-  override def call(clo: ScLattice.Clo[ScConcreteValues.ScAddr], operands: List[PS], syntacticOperands: List[ScExp]): ScEvalM[PS] = unit.flatMap(_ => {
+  override def call(
+      clo: ScLattice.Clo[ScConcreteValues.ScAddr],
+      operands: List[PS],
+      syntacticOperands: List[ScExp]
+    ): ScEvalM[PS] = unit.flatMap(_ => {
     if (maxdepth > 0) {
       maxdepth = maxdepth - 1
       super.call(clo, operands, syntacticOperands)

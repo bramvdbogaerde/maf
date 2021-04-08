@@ -114,6 +114,27 @@ trait ScSemantics extends ScAbstractSemanticsMonadAnalysis {
   }
 
   /**
+   * Evaluate an assumed expression, this method is abstract because the implementation
+   * differs from the analyser and the concrete execution
+   */
+  def evalAssumed(
+      name: ScIdentifier,
+      simpleContract: ScExp,
+      expr: ScExp,
+      idn: Identity
+    ): ScEvalM[PostValue]
+
+  /**
+   * Evaluate a `given` expression. This method is abstract because the implementation
+   * differs from the analyser and the concrete execution
+   */
+  def evalGiven(
+      name: ScIdentifier,
+      expr: ScExp,
+      idn: Identity
+    ): ScEvalM[PostValue]
+
+  /**
    * Returns true if the given path condition is satisfiable
    *
    * @param pc the path condition to solve for
@@ -144,19 +165,19 @@ trait ScSharedSemantics extends ScSemantics {
     case ScMon(contract, expression, idn, _)                  => evalMon(contract, expression, idn)
     case ScOpaque(_, refinements)                             => evalOpaque(refinements)
     //case ScHigherOrderContract(domain, range, idn)            => eval(higherOrderToDependentContract(domain, range, idn))
-    case ScDependentContract(domains, rangeMaker, _)     => evalDependentContract(domains, rangeMaker)
-    case ScFlatContract(expression, _)                   => evalFlatContract(expression)
-    case ScLambda(params, body, idn)                     => evalLambda(params, body, idn)
-    case ScAssume(identifier, assumption, expression, _) => evalAssume(identifier, assumption, expression)
-    case ScProgram(expressions, _)                       => evalProgram(expressions)
-    case ScDefine(variable, expression, _)               => evalDefine(variable, expression)
-    case ScDefineFn(name, parameters, body, idn)         => evalDefineFn(name, parameters, body, idn)
+    case ScDependentContract(domains, rangeMaker, _) => evalDependentContract(domains, rangeMaker)
+    case ScFlatContract(expression, _)               => evalFlatContract(expression)
+    case ScLambda(params, body, idn)                 => evalLambda(params, body, idn)
+    case ScProgram(expressions, _)                   => evalProgram(expressions)
+    case ScDefine(variable, expression, _)           => evalDefine(variable, expression)
+    case ScDefineFn(name, parameters, body, idn)     => evalDefineFn(name, parameters, body, idn)
     case ScDefineAnnotatedFn(name, parameters, contract, expression, idn) =>
       evalDefineAnnotatedFn(name, parameters, contract, expression, idn)
-    case ScProvideContracts(variables, contracts, _) => evalProvideContracts(variables, contracts)
-    case exp @ ScCar(pai, _)                         => evalCar(pai, exp)
-    case exp @ ScCdr(pai, _)                         => evalCdr(pai, exp)
-    case ScNil(_)                                    => result(lattice.schemeLattice.nil)
+    case ScAssumed(name, simpleContract, expression, idn) => evalAssumed(name, simpleContract, expression, idn)
+    case ScProvideContracts(variables, contracts, _)      => evalProvideContracts(variables, contracts)
+    case exp @ ScCar(pai, _)                              => evalCar(pai, exp)
+    case exp @ ScCdr(pai, _)                              => evalCdr(pai, exp)
+    case ScNil(_)                                         => result(lattice.schemeLattice.nil)
   })
 
   def blame[X](blamedIdentity: Identity, blamingIdentity: Identity = Identity.none): ScEvalM[X] =
@@ -485,6 +506,7 @@ trait ScSharedSemantics extends ScSemantics {
 
     for {
       value <- nondets(primitiveAp ++ cloAp ++ arrAp ++ flatAp ++ opqAp ++ thunk)
+      // TODO: also remove other potentially captured variables
       // conservatively remove variables from lambdas passed to the called function from the store cache.
       // this is necessary because these lambdas could be applied any number of times by the other functions
       // hence changing the state of the variables stored in the store cache
@@ -732,6 +754,33 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
           (ps, StoreWrapper.unwrap(store).asInstanceOf[StoreCacheAdapter])
         }
         .getOrElse((value(lattice.bottom), adapter))
+    }
+
+    /*==================================================================================================================*/
+
+    /** Evaluating `given` does not have any effect at analysis time, because the analyser assumes it being true */
+    override def evalGiven(
+        name: ScIdentifier,
+        expr: ScExp,
+        idn: Identity
+      ): ScEvalM[PostValue] = result(lattice.schemeLattice.nil)
+
+    override def evalAssumed(
+        name: ScIdentifier,
+        simpleContract: ScExp,
+        expr: ScExp,
+        idn: Identity
+      ): ScEvalM[PostValue] = {
+
+      val contractAddr = allocGeneric(simpleContract.idn, component)
+      val exprAddr = allocGeneric(expr.idn, component)
+      for {
+        evaluatedSimpleContract <- eval(simpleContract)
+        evaluatedExpr <- eval(expr)
+        _ <- write(contractAddr, evaluatedSimpleContract)
+        _ <- write(exprAddr, evaluatedExpr)
+        value <- result(lattice.assumedValue(AssumedValue(contractAddr, exprAddr)))
+      } yield value
     }
 
     /*==================================================================================================================*/

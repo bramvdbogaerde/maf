@@ -214,7 +214,12 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
     def getPrimitives(value: V): Set[SchemePrimitive[V, A]] =
       schemeLattice.getPrimitives(value).flatMap(primMap.get(_))
 
+    def getAssumedValues(value: V): Boolean = ???
+
     /*==================================================================================================================*/
+
+    def isDefinitivelyAssumedValue(value: V): Boolean =
+      value.left.vs.size != 0 && value.left.vs.size == getAssumedValues(value).size
 
     def isDefinitelyOpq(value: V): Boolean =
       value.left.vs.size != 0 &&

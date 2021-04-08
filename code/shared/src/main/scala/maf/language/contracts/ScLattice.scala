@@ -89,6 +89,9 @@ object ScLattice {
   /** A scheme symbol */
   case class Symbol(value: String)
 
+  /** A value that was produced by an assumed expression */
+  case class AssumedValue[Addr <: Address](simpleContract: Addr, value: Addr)
+
   /** Nil */
   case object Nil
 
@@ -302,6 +305,9 @@ trait ScSchemeLattice[L, Addr <: Address] extends Lattice[L] {
   /** Inject a closure in the abstract domain */
   def closure(clo: Clo[Addr]): L
 
+  /** Inject an assumed value in the abstract domain */
+  def assumedValue(assumed: AssumedValue[Addr]): L
+
   /*==================================================================================================================*/
 
   /** Extract a set of arrow (monitors on functions) from the abstract value */
@@ -331,11 +337,18 @@ trait ScSchemeLattice[L, Addr <: Address] extends Lattice[L] {
   /** Returns the set of scheme primitives of the value */
   def getPrimitives(value: L): Set[SchemePrimitive[L, Addr]]
 
+  /** Returns the set of assumed values of the value */
+  def getAssumedValues(value: L): Set[AssumedValue[Addr]]
+
   /*==================================================================================================================*/
 
+  /** Returns true if value an opaque value */
   def isDefinitelyOpq(value: L): Boolean
 
+  /** Returns true if we know for sure the the value is an arrow */
   def isDefinitelyArrow(value: L): Boolean
+
+  def isDefinitivelyAssumedValue(value: L): Boolean
 
   /** Returns true if the value is possible a blame */
   def isBlame(value: L): Boolean

@@ -45,17 +45,22 @@ trait ScAbstractValues[A <: Address] {
     def ord = 7
   }
 
+  case class AssumedValues(values: Set[AssumedValue[A]]) extends ValueExt {
+    def ord = 8
+  }
+
   object Values {
     implicit val partialLattice: PartialLattice[ValueExt] = new PartialLattice[ValueExt] {
       override def join(x: ValueExt, y: => ValueExt): ValueExt = (x, y) match {
-        case (Opqs(a), Opqs(b))     => Opqs(a ++ b)
-        case (Arrs(a), Arrs(b))     => Arrs(a ++ b)
-        case (Grds(a), Grds(b))     => Grds(a ++ b)
-        case (Blames(a), Blames(b)) => Blames(a ++ b)
-        case (Thunks(a), Thunks(b)) => Thunks(a ++ b)
-        case (Flats(a), Flats(b))   => Flats(a ++ b)
-        case (Clos(a), Clos(b))     => Clos(a ++ b)
-        case _                      => throw new Exception(s"Illegal join $x $y")
+        case (Opqs(a), Opqs(b))                   => Opqs(a ++ b)
+        case (Arrs(a), Arrs(b))                   => Arrs(a ++ b)
+        case (Grds(a), Grds(b))                   => Grds(a ++ b)
+        case (Blames(a), Blames(b))               => Blames(a ++ b)
+        case (Thunks(a), Thunks(b))               => Thunks(a ++ b)
+        case (Flats(a), Flats(b))                 => Flats(a ++ b)
+        case (Clos(a), Clos(b))                   => Clos(a ++ b)
+        case (AssumedValues(a), AssumedValues(b)) => AssumedValues(a ++ b)
+        case _                                    => throw new Exception(s"Illegal join $x $y")
       }
 
       override def subsumes(x: ValueExt, y: => ValueExt): Boolean =
