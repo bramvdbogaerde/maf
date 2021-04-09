@@ -138,6 +138,9 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
     def closure(clo: Clo[A]): V =
       Product2.injectLeft(ProductLattice(Clos(Set(clo))))
 
+    def assumedValue(value: AssumedValue[A]): V =
+      Product2.injectLeft(ProductLattice(AssumedValues(Set(value))))
+
     /*==================================================================================================================*/
 
     /** Extract a set of arrow (monitors on functions) from the abstract value */
@@ -214,7 +217,14 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
     def getPrimitives(value: V): Set[SchemePrimitive[V, A]] =
       schemeLattice.getPrimitives(value).flatMap(primMap.get(_))
 
-    def getAssumedValues(value: V): Boolean = ???
+    def getAssumedValues(value: V): Set[AssumedValue[A]] =
+      value.left.vs
+        .flatMap {
+          case v @ AssumedValues(_) => Some(v)
+          case _                    => None
+        }
+        .flatMap(_.values)
+        .toSet
 
     /*==================================================================================================================*/
 

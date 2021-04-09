@@ -14,6 +14,7 @@ import maf.language.scheme.{SchemeExp, SchemeFuncall}
 import maf.modular.contracts.ScAddresses
 import maf.modular.contracts.semantics.{ScModSemantics, ScSharedSemantics}
 import maf.util.benchmarks.Timeout
+import maf.language.contracts.ScLattice.AssumedValue
 
 case class PrimitiveNotFound(name: String) extends Exception {
   override def getMessage(): String =
@@ -82,7 +83,15 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
 
   override type Prim = ConcreteValues.Prim
 
-  implicit override val lattice: ScSchemeLattice[Val, Addr] = new ScConcreteLattice {}
+  implicit override val lattice: ScSchemeLattice[Val, Addr] = new ScConcreteLattice {
+    override def assumedValue(v: AssumedValue[Addr]): Val =
+      ??? // not supposed to happen
+
+    override def isDefinitivelyAssumedValue(v: Val): Boolean = false
+
+    override def getAssumedValues(v: Val): Set[AssumedValue[Addr]] =
+      Set() // not supposed to happen
+  }
 
   private var firstFree: Int = 0
   private def addr: Int = {
@@ -273,6 +282,7 @@ abstract class ConcolicTesting(
 
   def tree: ConcTree = _tree
   def results: List[Value] = _results.filterNot(_ == Value.Nil)
+  def violated: Set[String] = assumptionViolations.keySet
 
   override protected def throwAssumptionFailure(name: ScIdentifier, idn: Identity): ScEvalM[Unit] = {
     assumptionViolations += (name.name -> idn)

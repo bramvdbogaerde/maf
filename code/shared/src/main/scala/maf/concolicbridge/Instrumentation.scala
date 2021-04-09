@@ -1,6 +1,7 @@
 package maf.concolicbridge
 
 import maf.core.Identity
+import maf.core.InstrumentedIdentity
 import maf.language.contracts._
 
 /**
@@ -10,7 +11,11 @@ import maf.language.contracts._
  * @param idn the identity to use as a base identity
  */
 class IdentityGenerator(idn: Identity) {
-  def nextIdentity: Identity = ???
+  private var sequenceNumber = 0
+  def nextIdentity: Identity = {
+    sequenceNumber += 1
+    InstrumentedIdentity(idn.idn, sequenceNumber)
+  }
 }
 
 case class Instrumenter(replacementNodes: Map[Identity, (IdentityGenerator, ScExp) => ScExp]) {
