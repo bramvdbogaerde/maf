@@ -2,7 +2,7 @@ package maf.concolicbridge
 
 import maf.modular.contracts.semantics.ScModSemanticsScheme
 
-trait ScModSemanticsWithInstrumentation extends ScModSemanticsScheme {
+trait ScModSemanticsCollaborativeTesting extends ScModSemanticsScheme {
   override def intraAnalysis(component: Component): ScIntraAnalysisInstrumented
   var instrumenter: Instrumenter = Instrumenter(Map())
 

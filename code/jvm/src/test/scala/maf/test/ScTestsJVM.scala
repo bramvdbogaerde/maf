@@ -7,7 +7,7 @@ import maf.test.contracts.{ScTestGlobalStore, ScTestLocalStore}
 
 trait ScTestsJVM extends ScTests with ScAnalysisTests {
   trait ScTestAnalysisJVM extends ScTestAnalysis {
-    override def newSmtSolver(program: PC): ScSMTSolverJVM[Nothing] =
+    override def newSmtSolver(program: ScExp): ScSMTSolverJVM[Nothing] =
       new ScSMTSolverJVM(program, primitivesMap)
   }
 

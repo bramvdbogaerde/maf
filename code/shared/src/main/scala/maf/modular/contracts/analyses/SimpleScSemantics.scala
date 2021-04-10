@@ -8,6 +8,7 @@ import maf.util.benchmarks.Timeout
 import maf.modular.contracts.semantics._
 import maf.modular.contracts.domain._
 import maf.modular.contracts._
+import maf.concolicbridge.ScModSemanticsCollaborativeTesting
 
 object SimpleScSemantics {
   val primitivesMap = Map(
@@ -46,7 +47,8 @@ abstract class SimpleScSemantics(prg: ScExp)
        with ScBigStepSemanticsMonitored
        with ScStandardComponents
        with ScSchemePrimitives
-       with FIFOWorklistAlgorithm[ScExp] { outer =>
+       with FIFOWorklistAlgorithm[ScExp]
+       with ScBigStepSemanticsSchemeInstrumented { outer =>
 
   val primitivesMap: Map[String, String] = SimpleScSemantics.primitivesMap
   override def analyzeWithTimeout(timeout: Timeout.T): Unit = {
@@ -55,5 +57,5 @@ abstract class SimpleScSemantics(prg: ScExp)
   }
 
   override def intraAnalysis(component: Component) =
-    new IntraAnalysis(component) with IntraScBigStepSemantics with IntraScBigStepSemanticsMonitored {}
+    new IntraAnalysis(component) with IntraScBigStepSemantics with IntraScBigStepSemanticsMonitored with IntraAnalysisInstrumented {}
 }

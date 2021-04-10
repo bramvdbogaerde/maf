@@ -8,7 +8,7 @@ import maf.util.benchmarks.Timeout
 abstract class ConcolicBridge(exp: ScExp) {
 
   /** A modular analysis that will be used for analysing the program/ */
-  def modAnalysis(exp: ScExp): ScModSemanticsWithInstrumentation
+  def modAnalysis(exp: ScExp): ScModSemanticsCollaborativeTesting
 
   /** Creates an instance of the ocncolic tester */
   def concolicTester(exp: ScExp): ConcolicTesting
@@ -35,18 +35,21 @@ abstract class ConcolicBridge(exp: ScExp) {
     // introduced by the modular analysis
     val instrumented = analysis.instrumenter.run(exp)
 
-    // finally we pass the instrumented expression to the
-    // concolic tester and make it search for potential errors
-    val tester = concolicTester(instrumented)
-    tester.analyzeWithTimeout(timeout)
+    if (instrumented != exp) {
+      println(s"New program: ${instrumented}")
+      // finally we pass the instrumented expression to the
+      // concolic tester and make it search for potential errors
+      val tester = concolicTester(instrumented)
+      tester.analyzeWithTimeout(timeout)
 
-    val newVerified = analysis.assumed -- tester.violated
+      val newVerified = analysis.assumed -- tester.violated
 
-    // only continue to the next run if the violations or verified set
-    // changes
-    if (newVerified != verified || violated != tester.violated) {
-      // continue to the next run
-      analysisRun(instrumented, timeout, newVerified, tester.violated)
+      // only continue to the next run if the violations or verified set
+      // changes
+      if (newVerified != verified || violated != tester.violated) {
+        // continue to the next run
+        analysisRun(instrumented, timeout, newVerified, tester.violated)
+      }
     }
   }
 

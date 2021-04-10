@@ -6,6 +6,7 @@ import maf.language.scheme.lattices.Product2SchemeLattice.StoreWrapper
 import maf.util.benchmarks.Timeout
 import maf.language.sexp.Value
 import maf.modular.contracts._
+import maf.concolicbridge.ScModSemanticsCollaborativeTesting
 
 /**
  * This trait provides some methods that are useful for the semantics
@@ -143,7 +144,17 @@ trait ScSemantics extends ScAbstractSemanticsMonadAnalysis {
   def solve(pc: PC): Boolean
 }
 
-trait ScSharedSemantics extends ScSemantics {
+trait ScSemanticsHooks extends ScSemantics {
+  def evalFunctionApHook(
+      operator: PostValue,
+      operand: List[PostValue],
+      synOperator: ScExp,
+      synOperands: List[ScExp],
+      idn: Identity
+    ): ScEvalM[()] = unit
+}
+
+trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
   private lazy val primTrue = primMap("true?")
   private lazy val primFalse = primMap("false?")
   protected lazy val primProc = primMap("procedure?")
@@ -159,7 +170,7 @@ trait ScSharedSemantics extends ScSemantics {
     case ScRaise(_, _)                                        => ???
     case ScSet(variable, value, _)                            => evalSet(variable, value)
     case ScFunctionAp(ScIdentifier("and", _), operands, _, _) => evalAnd(operands)
-    case ScFunctionAp(operator, operands, _, _)               => evalFunctionAp(operator, operands)
+    case ScFunctionAp(operator, operands, idn, _)             => evalFunctionAp(operator, operands, idn)
     case v: ScValue                                           => evalValue(v)
     case exp: ScIdentifier                                    => evalIdentifier(exp)
     case ScMon(contract, expression, idn, _)                  => evalMon(contract, expression, idn)
@@ -410,9 +421,14 @@ trait ScSharedSemantics extends ScSemantics {
   def evalSequence(expressions: List[ScExp]): ScEvalM[PostValue] =
     sequence(expressions.map(eval)).map(_.reverse.head)
 
-  def evalFunctionAp(operator: ScExp, operands: List[ScExp]): ScEvalM[PostValue] = for {
+  def evalFunctionAp(
+      operator: ScExp,
+      operands: List[ScExp],
+      idn: Identity
+    ): ScEvalM[PostValue] = for {
     evaluatedOperator <- eval(operator)
     evaluatedOperands <- sequence(operands.map(eval))
+    _ <- evalFunctionApHook(evaluatedOperator, evaluatedOperands, operator, operands, idn)
     res <- applyFn(evaluatedOperator, evaluatedOperands, operator, operands)
   } yield res
 
@@ -831,7 +847,42 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
         .flatMap(component => {
           result(call(component))
         })
+        .flatMap(value => evictCloCall() >> pure(value))
     }
+
+    override def readPure(addr: Addr, storeCache: StoreCache): Val =
+      storeCache.lookup(addr).map(_.pure).getOrElse(super[IntraScAnalysisScheme].readAddr(addr))
+
+    protected def impactVariablesNames: List[String] = {
+      expr(component).subexpressions.flatMap {
+        case l: ScLambda =>
+          l.fv
+        case _ => List()
+      } ++ expr(component).fv
+    }
+
+    /**
+     * This function computes the variables that might be changed
+     * by calling another function from the current component.
+     */
+    protected def impactedVariables(): ScEvalM[List[Addr]] = {
+      val fv = impactVariablesNames
+      // resolve the free variables to addresses
+      sequence(fv.map(name => withEnv { env => env.lookup(name).map((v: Addr) => pure(v)).getOrElse(void) }))
+    }
+
+    /**
+     * Evicts some variables from the store cache if necessary.
+     *
+     * This is to ensure that new symbolic variables will be created for
+     * certain variables that might have been changed by the components that has
+     * been called. If not, some symbolic constraints might be automatically satisfiable
+     * while they shouldn't while others might be unsatisfiable while they should.
+     */
+    protected def evictCloCall(): ScEvalM[()] = for {
+      variables <- impactedVariables()
+      _ <- evict(variables)
+    } yield ()
 
     /*==================================================================================================================*/
 
@@ -908,6 +959,13 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
         addr
       }
 
+      // make the parameters available symbolically so that they can be used as constraints
+      // in symbolic path conditions
+      fnParams.foreach(addr => {
+        val value = readPure(addr, storeCache)
+        storeCache = StoreMap(storeCache.map + (addr -> ((value, ScIdentifier(ScModSemantics.genSym, Identity.none)))))
+      })
+
       Context(env = fnEnv, cache = storeCache, pc = ScNil())
     }
 
@@ -968,4 +1026,77 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
     }
   }
 
+}
+
+trait ScBigStepSemanticsSchemeInstrumented extends ScBigStepSemanticsScheme with ScModSemanticsCollaborativeTesting {
+  override def intraAnalysis(component: Component): IntraAnalysisInstrumented
+
+  trait IntraAnalysisInstrumented extends ScIntraAnalysisInstrumented with IntraScBigStepSemantics {
+    override def evalFunctionApHook(
+        operator: PostValue,
+        operand: List[PostValue],
+        synOperator: ScExp,
+        synOperands: List[ScExp],
+        idn: Identity
+      ): ScEvalM[Unit] = {
+      // first check whether the operator is an assumed value
+      // if it is we will not assume anything else. TODO: check only for purity here
+      if (lattice.isDefinitivelyAssumedValue(operator.pure) || lattice.getClosure(operator.pure).size < 1) {
+        unit
+      } else {
+        effectful {
+          withInstrumenter { instrumenter =>
+            // generate the name of the assumption
+            val assumptionName = ScModSemantics.genSym
+            assume(assumptionName)
+            instrumenter.replaceAt(
+              idn,
+              (gen, expr) => {
+                val assumptionIdent = () => ScIdentifier(assumptionName, gen.nextIdentity)
+                // generate the set of impacted variables
+                // TODO: this set of variables can be made smaller by checking which ones are actually used for the
+                // path condition
+                val variables = impactVariablesNames
+
+                // generate identifiers for the variables we care about
+                val identifiers = variables.map(v => () => ScIdentifier(v, gen.nextIdentity))
+
+                // generate names such as old-y and old-x
+                val oldIdentifiers = variables.map(_ => () => ScIdentifier(ScModSemantics.genSym, gen.nextIdentity))
+                // generate the assumption itself
+                val assumption = ScAssumed(assumptionIdent(), ScIdentifier("pure", gen.nextIdentity), synOperator, gen.nextIdentity)
+
+                val operator = ScModSemantics.freshIdent
+                /* (f x) -->
+                 * (letrec
+                 *   ((f (assumed purity pure f))
+                 *    (y old-y))
+                 *
+                 *   (f x)
+                 *   (given purity (= y old-y)))
+                 */
+                ScLetRec(
+                  List(operator.asInstanceOf[ScIdentifier]) ++ oldIdentifiers.map(_.apply()),
+                  List(assumption) ++ identifiers.map(_.apply()),
+                  ScBegin(
+                    List(ScFunctionAp(operator, synOperands, gen.nextIdentity)) ++
+                      identifiers.zip(oldIdentifiers).map { case (newIdent, oldIdent) =>
+                        ScGiven(assumptionIdent(),
+                                ScFunctionAp.primitive("=", List(newIdent.apply(), oldIdent.apply()), gen.nextIdentity),
+                                gen.nextIdentity
+                        )
+                      },
+                    gen.nextIdentity
+                  ),
+                  gen.nextIdentity
+                )
+              }
+            );
+          }
+        } >>
+          unit
+      }
+
+    }
+  }
 }
