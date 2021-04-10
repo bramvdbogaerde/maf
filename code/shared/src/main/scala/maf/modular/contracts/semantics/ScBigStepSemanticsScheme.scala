@@ -7,6 +7,7 @@ import maf.util.benchmarks.Timeout
 import maf.language.sexp.Value
 import maf.modular.contracts._
 import maf.concolicbridge.ScModSemanticsCollaborativeTesting
+import maf.core.Address
 
 /**
  * This trait provides some methods that are useful for the semantics
@@ -152,6 +153,26 @@ trait ScSemanticsHooks extends ScSemantics {
       synOperands: List[ScExp],
       idn: Identity
     ): ScEvalM[()] = unit
+
+  /**
+   * This hooks gets called when a function value is
+   * being applied to its operands, the return value
+   * of this function will be used as a possible
+   * set of alternative computations to
+   * for function call semantics
+   *
+   * @param operator
+   * @param operands
+   * @param syntactixOperator
+   * @param syntacticOperands
+   * @return
+   */
+  def applyFnHook(
+      operator: PostValue,
+      operands: List[PostValue],
+      syntactixOperator: ScExp,
+      syntacticOperands: List[ScExp]
+    ): Set[ScEvalM[PostValue]] = Set()
 }
 
 trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
@@ -463,6 +484,7 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
     // 4. Flat contract application
     // 5. Application of an OPQ value
 
+    val fromHook = applyFnHook(operator, operands, syntacticOperator, syntacticOperands)
     // 1. Primitive application
     val primitiveAp = lattice.schemeLattice.getPrimitives(operator.pure).map { prim =>
       val schemePrim = primMap(prim)
@@ -832,9 +854,18 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
       }
 
     override def call(
+        clo: ScLattice.Clo[Addr],
+        operands: List[PostValue],
+        syntacticOperands: List[ScExp]
+      ): ScEvalM[PostValue] = {
+      call(clo, operands, syntacticOperands, true)
+    }
+
+    protected def call(
         clo: Clo[Addr],
         operands: List[PS],
-        syntacticOperands: List[ScExp]
+        syntacticOperands: List[ScExp],
+        evict: Boolean
       ): ScEvalM[PS] = {
       val context = allocCtx(clo, operands.map(_.pure), clo.lambda.idn.pos, component)
       val called = Call(clo.env, clo.lambda, context)
@@ -844,7 +875,10 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
         .flatMap(component => {
           result(call(component))
         })
-        .flatMap(value => evictCloCall() >> pure(value))
+        .flatMap(value =>
+          (if (evict) { evictCloCall() }
+           else { unit }) >> pure(value)
+        )
     }
 
     override def readPure(addr: Addr, storeCache: StoreCache): Val =
@@ -1032,6 +1066,25 @@ trait ScBigStepSemanticsSchemeInstrumented extends ScBigStepSemanticsScheme with
   override def intraAnalysis(component: Component): IntraAnalysisInstrumented
 
   trait IntraAnalysisInstrumented extends ScIntraAnalysisInstrumented with IntraScBigStepSemantics {
+    override def applyFnHook(
+        operator: PostValue,
+        operands: List[PostValue],
+        syntactixOperator: ScExp,
+        syntacticOperands: List[ScExp]
+      ): Set[ScEvalM[PostValue]] = {
+      lattice.getAssumedValues(operator.pure).map { assumption =>
+        for {
+          actualValue <- read(assumption.value)
+          actualSimpleContract <- read(assumption.simpleContract)
+
+          value <- nondets(lattice.getClosure(actualValue.pure).map { closure =>
+            // depending on if purity of the assumption is enabled, the analysis will proceed differently
+            call(closure, operands, syntacticOperands, !lattice.schemeLattice.getPrimitives(actualSimpleContract.pure).contains("pure"))
+          })
+        } yield value
+      }
+    }
+
     override def evalFunctionApHook(
         operator: PostValue,
         operand: List[PostValue],
