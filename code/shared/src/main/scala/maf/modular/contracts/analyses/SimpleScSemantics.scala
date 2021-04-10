@@ -34,6 +34,7 @@ object SimpleScSemantics {
     "number?" -> "int?/c",
     "char?" -> "char?/c",
     "pair?" -> "pair?/c",
+    "equal?" -> "equal?/c",
     "string-length" -> "string-length",
     "null?" -> "null?/c",
     "dependent-contract?" -> "dependent-contract/c"

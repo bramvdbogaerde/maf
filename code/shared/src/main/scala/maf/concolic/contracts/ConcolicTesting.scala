@@ -15,6 +15,7 @@ import maf.modular.contracts.ScAddresses
 import maf.modular.contracts.semantics.{ScModSemantics, ScSharedSemantics}
 import maf.util.benchmarks.Timeout
 import maf.language.contracts.ScLattice.AssumedValue
+import maf.language.contracts.lattices.ScConcreteValues.ConsValue
 
 case class PrimitiveNotFound(name: String) extends Exception {
   override def getMessage(): String =
@@ -25,6 +26,37 @@ object ScConcretePrimitives {
   import ConcreteValues._
 
   import scala.collection.immutable.Nil
+
+  /** Checks whether two objects are equal. */
+  object `equal?` extends SimplePrim {
+    override val name: String = "equal?"
+
+    override def call(args: List[ConcreteValues.Value], position: Position.Position): ConcreteValues.Value = args match {
+      case Value.Undefined(_) :: Value.Undefined(_) :: Nil => Value.Bool(true)
+      case (a: Value.Clo) :: (b: Value.Clo) :: Nil         => Value.Bool(a == b)
+      case Value.Primitive(a) :: Value.Primitive(b) :: Nil =>
+        Value.Bool(a == b)
+      case Value.Str(a) :: Value.Str(b) :: Nil =>
+        Value.Bool(a == b)
+      case Value.Symbol(a) :: Value.Symbol(b) :: Nil =>
+        Value.Bool(a == b)
+      case Value.Real(a) :: Value.Real(b) :: Nil =>
+        Value.Bool(a == b)
+      case Value.Bool(a) :: Value.Bool(b) :: Nil =>
+        Value.Bool(a == b)
+      case Value.Character(a) :: Value.Character(b) :: Nil =>
+        Value.Bool(a == b)
+      case Value.Nil :: Value.Nil :: Nil                                  => Value.Bool(true)
+      case Value.Vector(_, elems, _) :: Value.Vector(_, elems2, _) :: Nil => Value.Bool(elems == elems2)
+      case Value.Void :: Value.Void :: Nil =>
+        Value.Bool(true)
+      case ClosureValue(clo1) :: ClosureValue(clo2) :: Nil =>
+        Value.Bool(clo1 == clo2)
+      case a :: b :: Nil => throw new Exception(s"unsupported values for equality, $a and $b")
+      case _             => throw new Exception(s"expected 2 arguments got ${args.size}")
+    }
+
+  }
 
   object `dependent-contract?` extends SimplePrim {
     override val name: String = "dependent-contract?"
@@ -157,7 +189,7 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
   import ScConcretePrimitives._
   private def interop = new MonadicSchemeInterpreter(ConcolicStore(Map()))
   private def scPrimitives =
-    List(`true?`, `false?`, `dependent-contract?`, `procedure?`)
+    List(`true?`, `false?`, `dependent-contract?`, `procedure?`, `equal?`)
 
   private lazy val allPrimitives =
     (interop.Primitives.allPrimitives.map(_._2) ++ scPrimitives).map(p => (p.name, p)).toMap
@@ -316,7 +348,7 @@ abstract class ConcolicTesting(
    * mapped to the actual primitives
    */
   private def initialConcolicStore: ConcolicStore = {
-    ConcolicStore(primitives.map(p => (allocator.allocPrim(p), PS(ConcreteValues.Value.Primitive(p), ScIdentifier(p, Identity.none)))).toMap)
+    ConcolicStore(primitives.map(p => (allocator.allocPrim(p), PS(ConcreteValues.Value.Primitive(p), ScNil()))).toMap)
   }
 
   /**

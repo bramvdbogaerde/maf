@@ -37,4 +37,9 @@ class CollaborativeAnalysisTest extends ScTestsJVMGlobalStore {
     val result = analyze("(+ 1 1)")
     result.finalResult shouldEqual result.lattice.schemeLattice.number(2)
   }
+
+  "(define (f x) (+ x 1)) (f 1)" should "equal 2" in {
+    val result = analyze("(define (f x) (+ x 1)) (f 1)")
+    result.finalResult shouldEqual result.lattice.schemeLattice.number(2)
+  }
 }

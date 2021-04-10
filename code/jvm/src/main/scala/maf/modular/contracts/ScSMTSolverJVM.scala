@@ -43,6 +43,7 @@ class ScSMTSolverJVM[V](
         (VProc (unwrap-proc Int))
         (VPai  (car V) (cdr V))
         (VNil)
+        (VTypeErr)
         (VString (unwrap-string String))
         (VPrim (unwrap-prim String)))))
   """
@@ -91,6 +92,20 @@ class ScSMTSolverJVM[V](
          (and ((_ is VBool) v1)
               (unwrap-bool v1))))
 
+
+    (define-fun equal?/c ((v1 V) (v2 V)) V 
+      (ite (and (is-VInt v1) (is-VInt v2))
+           (VBool (= (unwrap-int v1)
+              (unwrap-int v2)))
+           (VBool false)))
+           ;(ite (and (is-VBool v1) (is-VBool v2))
+           ;     (VBool (and (unwrap-bool v1) (unwrap-bool v2)))
+           ;     (ite (is-VProc v1) (is-VProc v2)
+           ;          (VBool (= (unwrap-proc v1) (unwrap-proc v2)))
+           ;          (ite (and (is-VNil v1) (is-VNil v2))
+           ;               (VBool #t)
+           ;               (VBool #f))))))
+                        
     ;; only false is false
     (define-fun false?/c ((v1 V)) Bool
       (not (unwrap-bool v1)))
@@ -141,13 +156,13 @@ class ScSMTSolverJVM[V](
     context.mkDatatypeSort(
       sortVName,
       Array(
-        context.mkConstructor("VInt", "is_int", Array("unwrap-int"), Array(context.getIntSort()), null),
-        context.mkConstructor("VBool", "is_bool", Array("unwrap-bool"), Array(context.getBoolSort()), null),
-        context.mkConstructor("VProc", "is_proc", Array("unwrap-proc"), Array(context.getIntSort()), null),
-        context.mkConstructor("VPai", "is_pai", Array("car", "cdr"), Array(null, null), Array(0, 0)),
-        context.mkConstructor("VNil", "is_nil", Array[String](), Array(), null),
-        context.mkConstructor("VString", "is_string", Array("unwrap-string"), Array(context.getStringSort()), null),
-        context.mkConstructor("VPrim", "is_prim", Array("unwrap-prim"), Array(context.getStringSort()), null)
+        context.mkConstructor("VInt", "is-VInt", Array("unwrap-int"), Array(context.getIntSort()), null),
+        context.mkConstructor("VBool", "is-VBool", Array("unwrap-bool"), Array(context.getBoolSort()), null),
+        context.mkConstructor("VProc", "is-VPoc", Array("unwrap-proc"), Array(context.getIntSort()), null),
+        context.mkConstructor("VPai", "is-VPai", Array("car", "cdr"), Array(null, null), Array(0, 0)),
+        context.mkConstructor("VNil", "is-VNil", Array[String](), Array(), null),
+        context.mkConstructor("VString", "is-VString", Array("unwrap-string"), Array(context.getStringSort()), null),
+        context.mkConstructor("VPrim", "is-VPrim", Array("unwrap-prim"), Array(context.getStringSort()), null)
       )
     )
   }

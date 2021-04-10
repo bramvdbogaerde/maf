@@ -185,6 +185,7 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
     case ScDefineAnnotatedFn(name, parameters, contract, expression, idn) =>
       evalDefineAnnotatedFn(name, parameters, contract, expression, idn)
     case ScAssumed(name, simpleContract, expression, idn) => evalAssumed(name, simpleContract, expression, idn)
+    case ScGiven(name, expr, idn)                         => evalGiven(name, expr, idn)
     case ScProvideContracts(variables, contracts, _)      => evalProvideContracts(variables, contracts)
     case exp @ ScCar(pai, _)                              => evalCar(pai, exp)
     case exp @ ScCdr(pai, _)                              => evalCdr(pai, exp)
@@ -387,20 +388,16 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
       bindings: List[ScExp],
       body: ScExp
     ): ScEvalM[PostValue] =
-    for {
-      // first evaluate the bindings
-      _ <- sequence(idents.lazyZip(bindings).map { (ident, binding) =>
-        extended(ident) { addr =>
-          for {
-            evaluatedBinding <- eval(binding)
-            _ <- write(addr, evaluatedBinding)
-          } yield ()
-        }
-      })
+    // first evaluate the bindings
+    extended(idents) { addrs =>
+      for {
+        _ <- sequence(addrs.lazyZip(bindings).map { (addr, binding) =>
+          eval(binding).flatMap(v => write(addr, v))
+        })
 
-      // then evaluate the body in an extended environment
-      evaluatedBody <- extended(idents)(_ => eval(body))
-    } yield evaluatedBody
+        evaluatedBody <- eval(body)
+      } yield evaluatedBody
+    }
 
   def evalOpaque(refinements: Set[String]): ScEvalM[PostValue] =
     pure(value(lattice.opq(Opq(refinements)), ScIdentifier(ScModSemantics.genSym, Identity.none)))
@@ -887,10 +884,13 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
     /*==================================================================================================================*/
 
     override def lookupOrDefine(identifier: ScIdentifier): ScEvalM[Addr] = withEnv { (env) =>
-      pure(env.lookup(identifier.name).getOrElse {
-        val addr = allocVar(identifier, context(component))
-        addr
-      })
+      val addr = env
+        .lookup(identifier.name)
+        .getOrElse(
+          allocVar(identifier, context(component))
+        )
+
+      modifyEnv(env => env.extend(identifier.name, addr)) >> pure(addr)
     }
 
     def cacheContains(addr: Addr): ScEvalM[Boolean] = withStoreCache { cache =>
@@ -1062,7 +1062,8 @@ trait ScBigStepSemanticsSchemeInstrumented extends ScBigStepSemanticsScheme with
                 val identifiers = variables.map(v => () => ScIdentifier(v, gen.nextIdentity))
 
                 // generate names such as old-y and old-x
-                val oldIdentifiers = variables.map(_ => () => ScIdentifier(ScModSemantics.genSym, gen.nextIdentity))
+                val oldNames = variables.map(_ => ScModSemantics.genSym)
+                val oldIdentifiers = oldNames.map(name => () => ScIdentifier(name, gen.nextIdentity))
                 // generate the assumption itself
                 val assumption = ScAssumed(assumptionIdent(), ScIdentifier("pure", gen.nextIdentity), synOperator, gen.nextIdentity)
 
@@ -1082,7 +1083,7 @@ trait ScBigStepSemanticsSchemeInstrumented extends ScBigStepSemanticsScheme with
                     List(ScFunctionAp(operator, synOperands, gen.nextIdentity)) ++
                       identifiers.zip(oldIdentifiers).map { case (newIdent, oldIdent) =>
                         ScGiven(assumptionIdent(),
-                                ScFunctionAp.primitive("=", List(newIdent.apply(), oldIdent.apply()), gen.nextIdentity),
+                                ScFunctionAp.primitive("equal?", List(newIdent.apply(), oldIdent.apply()), gen.nextIdentity),
                                 gen.nextIdentity
                         )
                       },
