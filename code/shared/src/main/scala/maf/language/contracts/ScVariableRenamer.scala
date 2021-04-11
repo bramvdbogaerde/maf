@@ -37,87 +37,133 @@ class ScVariableRenamer {
   }
 
   def transform(exp: ScExp): ScExp =
-    transform(exp, Map())
+    transform(exp, Map())._1
 
-  def transform(exp: ScExp, env: Map[String, String]): ScExp = exp match {
+  def transform(exp: ScExp, env: Map[String, String]): (ScExp, Map[String, String]) = exp match {
     case ScBegin(expressions, idn) =>
-      val transformedExprs = expressions.map(e => transform(e, env))
-      ScBegin(transformedExprs, idn)
+      val (transformedExprs, newEnv) = expressions
+        .foldRight((List[ScExp](), env))((exp, res) => {
+          val (transExp, updatedEnv) = transform(exp, res._2)
+          (transExp :: res._1, updatedEnv)
+        })
+
+      (ScBegin(transformedExprs, idn), newEnv)
 
     case ScIf(condition, consequent, alternative, idn) =>
-      val transformedCond = transform(condition, env)
-      val transformedConsequent = transform(consequent, env)
-      val transformedAlternative = transform(alternative, env)
-      ScIf(transformedCond, transformedConsequent, transformedAlternative, idn)
+      val transformedCond = transform(condition, env)._1
+      val transformedConsequent = transform(consequent, env)._1
+      val transformedAlternative = transform(alternative, env)._1
+      (ScIf(transformedCond, transformedConsequent, transformedAlternative, idn), env)
 
     case ScLetRec(idents, bindings, body, idn) =>
       val extended = env ++ idents.map(ident => (ident.name -> genSym))
-      val transformedIdents = idents.map(ident => transform(ident, extended).asInstanceOf[ScIdentifier])
-      val transformedBindings = bindings.map(binding => transform(binding, extended))
-      val transformedBody = transform(body, extended)
-      ScLetRec(transformedIdents, transformedBindings, transformedBody, idn)
+      val transformedIdents = idents.map(ident => transform(ident, extended)._1.asInstanceOf[ScIdentifier])
+      val transformedBindings = bindings.map(binding => transform(binding, extended)._1)
+      val transformedBody = transform(body, extended)._1
+      (ScLetRec(transformedIdents, transformedBindings, transformedBody, idn), env)
 
     case ScSet(variable, value, idn) =>
       val transformedVariable = lookupIdentifier(variable, env)
-      val transformedValue = transform(value, env)
-      ScSet(transformedVariable, transformedValue, idn)
+      val transformedValue = transform(value, env)._1
+      (ScSet(transformedVariable, transformedValue, idn), env)
 
     case ScFunctionAp(operator, operands, idn, toplevel) =>
-      val transformedOperator = transform(operator, env)
-      val transformedOperands = operands.map(operand => transform(operand, env))
-      ScFunctionAp(transformedOperator, transformedOperands, idn, toplevel)
+      val transformedOperator = transform(operator, env)._1
+      val transformedOperands = operands.map(operand => transform(operand, env)._1)
+      (ScFunctionAp(transformedOperator, transformedOperands, idn, toplevel), env)
 
-    case v: ScValue => v
+    case v: ScValue => (v, env)
     case exp: ScIdentifier =>
-      env.get(exp.name).map(n => ScIdentifier(n, exp.idn)).getOrElse(exp)
+      (env.get(exp.name).map(n => ScIdentifier(n, exp.idn)).getOrElse(exp), env)
 
     case ScMon(contract, expression, idn, annotation) =>
-      val transformedContract = transform(contract, env)
-      val transformedExpression = transform(expression, env)
-      ScMon(transformedContract, transformedExpression, idn, annotation)
+      val transformedContract = transform(contract, env)._1
+      val transformedExpression = transform(expression, env)._1
+      (ScMon(transformedContract, transformedExpression, idn, annotation), env)
 
-    case o: ScOpaque => o
+    case o: ScOpaque => (o, env)
     case ScDependentContract(domains, rangeMaker, idn) =>
-      val transformedDomains = domains.map(d => transform(d, env))
-      val transformedRangeMaker = transform(rangeMaker, env)
-      ScDependentContract(transformedDomains, transformedRangeMaker, idn)
+      val transformedDomains = domains.map(d => transform(d, env)._1)
+      val transformedRangeMaker = transform(rangeMaker, env)._1
+      (ScDependentContract(transformedDomains, transformedRangeMaker, idn), env)
 
     case ScFlatContract(expression, idn) =>
-      val transformedExpression = transform(expression, env)
-      ScFlatContract(transformedExpression, idn)
+      val transformedExpression = transform(expression, env)._1
+      (ScFlatContract(transformedExpression, idn), env)
 
     case ScLambda(params, body, idn) =>
       val extended = env ++ params.map(p => (p.name -> genSym))
       val transformedParams = params.map {
         case id: ScIdentifier =>
-          lookupIdentifier(id, env)
+          lookupIdentifier(id, extended)
         case varArg: ScVarArgIdentifier =>
-          ScVarArgIdentifier(lookup(varArg.name, env, varArg.idn), varArg.idn)
+          ScVarArgIdentifier(lookup(varArg.name, extended, varArg.idn), varArg.idn)
       }
-      val transformedBody = transform(body, extended)
-      ScLambda(transformedParams, transformedBody, idn)
+      val transformedBody = transform(body, extended)._1
+      (ScLambda(transformedParams, transformedBody, idn), env)
 
-    case ScProgram(expressions, _)                                        => ???
-    case ScDefine(variable, expression, _)                                => ???
-    case ScDefineFn(name, parameters, body, idn)                          => ???
-    case ScDefineAnnotatedFn(name, parameters, contract, expression, idn) => ???
+    case ScProgram(expressions, idn) =>
+      val (transformedExprs, newEnv) = expressions
+        .foldRight((List[ScExp](), env))((exp, res) => {
+          val (transExp, updatedEnv) = transform(exp, res._2)
+          (transExp :: res._1, updatedEnv)
+        })
+
+      (ScProgram(transformedExprs, idn), newEnv)
+
+    case ScDefine(variable, expression, idn) =>
+      val extended = env + (variable.name -> genSym)
+      val transformedVariable = lookupIdentifier(variable, extended)
+      val transformedExpression = transform(expression, env)._1
+      (ScDefine(transformedVariable, transformedExpression, idn), extended)
+
+    case ScDefineFn(name, params, body, idn) =>
+      val extended = env + (name.name -> genSym)
+      val transformedName = lookupIdentifier(name, extended)
+      val extended2 = env ++ params.map(p => (p.name -> genSym))
+      val transformedParams = params.map {
+        case id: ScIdentifier =>
+          lookupIdentifier(id, extended2)
+        case varArg: ScVarArgIdentifier =>
+          ScVarArgIdentifier(lookup(varArg.name, extended2, varArg.idn), varArg.idn)
+      }
+      val (transformedBody, _) = transform(body, extended2)
+      (ScDefineFn(transformedName, transformedParams, transformedBody.asInstanceOf[ScBegin], idn), extended)
+
+    case ScDefineAnnotatedFn(name, params, contract, expression, idn) =>
+      val extended = env + (name.name -> genSym)
+      val transformedName = lookupIdentifier(name, extended)
+      val extended2 = env ++ params.map(p => (p.name -> genSym))
+      val transformedParams = params.map {
+        case id: ScIdentifier =>
+          lookupIdentifier(id, extended2)
+        case varArg: ScVarArgIdentifier =>
+          ScVarArgIdentifier(lookup(varArg.name, extended2, varArg.idn), varArg.idn)
+      }
+      val (transformedBody, _) = transform(expression, extended2)
+      val (transformedContract, _) = transform(contract, extended)
+      (ScDefineAnnotatedFn(transformedName, transformedParams, transformedContract, transformedBody.asInstanceOf[ScBegin], idn), extended)
 
     case ScAssumed(name, simpleContract, expression, idn) =>
-      val transformedExpression = transform(expression, env)
-      ScAssumed(name, simpleContract, transformedExpression, idn)
+      val transformedExpression = transform(expression, env)._1
+      (ScAssumed(name, simpleContract, transformedExpression, idn), env)
 
     case ScGiven(name, expr, idn) =>
-      val transformedExpr = transform(expr, env)
-      ScGiven(name, transformedExpr, idn)
+      val transformedExpr = transform(expr, env)._1
+      (ScGiven(name, transformedExpr, idn), env)
 
-    case ScProvideContracts(variables, contracts, _) => ???
+    case ScProvideContracts(variables, contracts, idn) =>
+      val transformedVariables = variables.map(v => lookupIdentifier(v, env))
+      val transformedContracts = contracts.map(c => transform(c, env)._1)
+      (ScProvideContracts(transformedVariables, transformedContracts, idn), env)
+
     case ScCar(pai, idn) =>
-      val transformed = transform(pai, env)
-      ScCar(transformed, idn)
+      val transformed = transform(pai, env)._1
+      (ScCar(transformed, idn), env)
     case ScCdr(pai, idn) =>
-      val transformed = transform(pai, env)
-      ScCdr(transformed, idn)
-    case n: ScNil   => n
-    case e: ScRaise => e
+      val transformed = transform(pai, env)._1
+      (ScCdr(transformed, idn), env)
+    case n: ScNil   => (n, env)
+    case e: ScRaise => (e, env)
   }
 }
