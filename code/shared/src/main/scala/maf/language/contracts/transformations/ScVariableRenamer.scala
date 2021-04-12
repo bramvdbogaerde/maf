@@ -145,9 +145,10 @@ class ScVariableRenamer {
       val (transformedContract, _) = transform(contract, extended)
       (ScDefineAnnotatedFn(transformedName, transformedParams, transformedContract, transformedBody.asInstanceOf[ScBegin], idn), extended)
 
-    case ScAssumed(name, simpleContract, expression, idn) =>
+    case ScAssumed(name, simpleContract, expression, arguments, idn) =>
       val transformedExpression = transform(expression, env)._1
-      (ScAssumed(name, simpleContract, transformedExpression, idn), env)
+      val transformedArguments = arguments.map(arg => transform(arg, env)._1)
+      (ScAssumed(name, simpleContract, transformedExpression, transformedArguments, idn), env)
 
     case ScGiven(name, expr, idn) =>
       val transformedExpr = transform(expr, env)._1

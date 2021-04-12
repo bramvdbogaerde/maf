@@ -120,10 +120,11 @@ class RecursiveFunctionInlinining(
       case df: ScDefineAnnotatedFn =>
         df
 
-      case ScAssumed(name, simpleContract, expression, idn) =>
-        val tCon = transform(simpleContract)
+      case ScAssumed(name, simpleContract, expression, arguments, idn) =>
+        val tCon = transform(simpleContract).asInstanceOf[ScIdentifier]
         val tExp = transform(expression)
-        ScAssumed(name, tCon, tExp, idn)
+        val tArgs = arguments.map(transform)
+        ScAssumed(name, tCon, tExp, tArgs, idn)
 
       case ScGiven(name, expr, idn) =>
         val tExpr = transform(expr)

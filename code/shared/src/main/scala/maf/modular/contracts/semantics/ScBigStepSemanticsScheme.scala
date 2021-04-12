@@ -121,8 +121,9 @@ trait ScSemantics extends ScAbstractSemanticsMonadAnalysis {
    */
   def evalAssumed(
       name: ScIdentifier,
-      simpleContract: ScExp,
+      simpleContract: ScIdentifier,
       expr: ScExp,
+      arguments: List[ScExp],
       idn: Identity
     ): ScEvalM[PostValue]
 
@@ -155,6 +156,19 @@ trait ScSemanticsHooks extends ScSemantics {
     ): ScEvalM[()] = unit
 
   /**
+   * This hook gets called after the contract has been evaluated and
+   * a decision needs to be made whether a blame gets generated or not.
+   *
+   * The decision code is passed as an argument and can be ignored if necessary
+   */
+  def monFlatHook(
+      value: PostValue,
+      conditional: ScEvalM[PostValue],
+      blamedIdentity: Identity,
+      blamingIdentity: Identity
+    ): ScEvalM[PostValue] = conditional
+
+  /**
    * This hooks gets called when a function value is
    * being applied to its operands, the return value
    * of this function will be used as a possible
@@ -176,8 +190,8 @@ trait ScSemanticsHooks extends ScSemantics {
 }
 
 trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
-  private lazy val primTrue = primMap("true?")
-  private lazy val primFalse = primMap("false?")
+  protected lazy val primTrue = primMap("true?")
+  protected lazy val primFalse = primMap("false?")
   protected lazy val primProc = primMap("procedure?")
   private lazy val primDep = primMap("dependent-contract?")
   private lazy val primCar = primMap("car")
@@ -205,12 +219,13 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
     case ScDefineFn(name, parameters, body, idn)     => evalDefineFn(name, parameters, body, idn)
     case ScDefineAnnotatedFn(name, parameters, contract, expression, idn) =>
       evalDefineAnnotatedFn(name, parameters, contract, expression, idn)
-    case ScAssumed(name, simpleContract, expression, idn) => evalAssumed(name, simpleContract, expression, idn)
-    case ScGiven(name, expr, idn)                         => evalGiven(name, expr, idn)
-    case ScProvideContracts(variables, contracts, _)      => evalProvideContracts(variables, contracts)
-    case exp @ ScCar(pai, _)                              => evalCar(pai, exp)
-    case exp @ ScCdr(pai, _)                              => evalCdr(pai, exp)
-    case ScNil(_)                                         => result(lattice.schemeLattice.nil)
+    case ScAssumed(name, simpleContract, expression, arguments, idn) =>
+      evalAssumed(name, simpleContract, expression, arguments, idn)
+    case ScGiven(name, expr, idn)                    => evalGiven(name, expr, idn)
+    case ScProvideContracts(variables, contracts, _) => evalProvideContracts(variables, contracts)
+    case exp @ ScCar(pai, _)                         => evalCar(pai, exp)
+    case exp @ ScCdr(pai, _)                         => evalCdr(pai, exp)
+    case ScNil(_)                                    => result(lattice.schemeLattice.nil)
   })
 
   def blame[X](blamedIdentity: Identity, blamingIdentity: Identity = Identity.none): ScEvalM[X] =
@@ -588,19 +603,26 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
       expressionValue: PostValue,
       blamedIdentity: Identity,
       blamingIdentity: Identity = Identity.none,
-      doBlame: Boolean = true
+      doBlame: Boolean = true,
+      syntacticExpression: Option[ScExp] = None
     ): ScEvalM[PostValue] =
     applyFn(contract,
             List(expressionValue),
             ScNil(),
-            List(expressionValue.symbolic)
+            List(syntacticExpression.getOrElse(expressionValue.symbolic))
     ) // TODO: operator is specified to be nil, that might give an issue with store changing flat contracts
       .flatMap { value =>
-        cond(
+        val afterHook = monFlatHook(
           value,
-          pure(enrich(contract, expressionValue)),
-          if (doBlame) blame(blamedIdentity, blamingIdentity) else void
+          cond(
+            value,
+            pure(enrich(contract, expressionValue)),
+            if (doBlame) blame(blamedIdentity, blamingIdentity) else void
+          ),
+          blamedIdentity,
+          blamingIdentity
         )
+        afterHook
       }
 
   def cond[X](
@@ -675,7 +697,7 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
    * @return an either value, being Left when the condition is not feasible, otherwise Right. In both cases the
    * value contained within the Either value will be the path condition
    */
-  private def feasible(op: Prim, value: PostValue)(pc: PC): Either[PC, PC] = {
+  protected def feasible(op: Prim, value: PostValue)(pc: PC): Either[PC, PC] = {
     val newPc = pc.and(ScFunctionAp(ScIdentifier(primName(op), Identity.none), List(value.symbolic), Identity.none))
     value.symbolic match {
       case _ if !lattice.schemeLattice.isTrue(run(callPrimitive(PrimitiveOperator(op, ScNil()), Argument(value, ScNil()))).pure) =>
@@ -800,24 +822,6 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
         idn: Identity
       ): ScEvalM[PostValue] = result(lattice.schemeLattice.nil)
 
-    override def evalAssumed(
-        name: ScIdentifier,
-        simpleContract: ScExp,
-        expr: ScExp,
-        idn: Identity
-      ): ScEvalM[PostValue] = {
-
-      val contractAddr = allocGeneric(simpleContract.idn, component)
-      val exprAddr = allocGeneric(expr.idn, component)
-      for {
-        evaluatedSimpleContract <- eval(simpleContract)
-        evaluatedExpr <- eval(expr)
-        _ <- write(contractAddr, evaluatedSimpleContract)
-        _ <- write(exprAddr, evaluatedExpr)
-        value <- result(lattice.assumedValue(AssumedValue(contractAddr, exprAddr)))
-      } yield value
-    }
-
     /*==================================================================================================================*/
 
     override def throwBlameError(blame: Blame): ScEvalM[Unit] =
@@ -861,6 +865,13 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
       call(clo, operands, syntacticOperands, true)
     }
 
+    protected def createCalledComponent(clo: Clo[Addr], operands: List[PS]): Component = {
+      val context = allocCtx(clo, operands.map(_.pure), clo.lambda.idn.pos, component)
+      val called = Call(clo.env, clo.lambda, context)
+      val calledComponent = newComponent(called)
+      calledComponent
+    }
+
     protected def call(
         clo: Clo[Addr],
         operands: List[PS],
@@ -868,8 +879,7 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
         evict: Boolean
       ): ScEvalM[PS] = {
       val context = allocCtx(clo, operands.map(_.pure), clo.lambda.idn.pos, component)
-      val called = Call(clo.env, clo.lambda, context)
-      val calledComponent = newComponent(called)
+      val calledComponent = createCalledComponent(clo, operands)
       bindArgs(operands, clo.lambda.variables, syntacticOperands, context)
         .map(_ => calledComponent)
         .flatMap(component => {
@@ -1060,97 +1070,4 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
     }
   }
 
-}
-
-trait ScBigStepSemanticsSchemeInstrumented extends ScBigStepSemanticsScheme with ScModSemanticsCollaborativeTesting {
-  override def intraAnalysis(component: Component): IntraAnalysisInstrumented
-
-  trait IntraAnalysisInstrumented extends ScIntraAnalysisInstrumented with IntraScBigStepSemantics {
-    override def applyFnHook(
-        operator: PostValue,
-        operands: List[PostValue],
-        syntactixOperator: ScExp,
-        syntacticOperands: List[ScExp]
-      ): Set[ScEvalM[PostValue]] = {
-      lattice.getAssumedValues(operator.pure).map { assumption =>
-        for {
-          actualValue <- read(assumption.value)
-          actualSimpleContract <- read(assumption.simpleContract)
-
-          value <- nondets(lattice.getClosure(actualValue.pure).map { closure =>
-            // depending on if purity of the assumption is enabled, the analysis will proceed differently
-            call(closure, operands, syntacticOperands, !lattice.schemeLattice.getPrimitives(actualSimpleContract.pure).contains("pure"))
-          })
-        } yield value
-      }
-    }
-
-    override def evalFunctionApHook(
-        operator: PostValue,
-        operand: List[PostValue],
-        synOperator: ScExp,
-        synOperands: List[ScExp],
-        idn: Identity
-      ): ScEvalM[Unit] = {
-      // first check whether the operator is an assumed value
-      // if it is we will not assume anything else. TODO: check only for purity here
-      if (lattice.isDefinitivelyAssumedValue(operator.pure) || lattice.getClosure(operator.pure).size < 1) {
-        unit
-      } else {
-        effectful {
-          withInstrumenter { instrumenter =>
-            // generate the name of the assumption
-            val assumptionName = ScModSemantics.genSym
-            assume(assumptionName)
-            instrumenter.replaceAt(
-              idn,
-              (gen, expr) => {
-                val assumptionIdent = () => ScIdentifier(assumptionName, gen.nextIdentity)
-                // generate the set of impacted variables
-                // TODO: this set of variables can be made smaller by checking which ones are actually used for the
-                // path condition
-                val variables = impactVariablesNames
-
-                // generate identifiers for the variables we care about
-                val identifiers = variables.map(v => () => ScIdentifier(v, gen.nextIdentity))
-
-                // generate names such as old-y and old-x
-                val oldNames = variables.map(_ => ScModSemantics.genSym)
-                val oldIdentifiers = oldNames.map(name => () => ScIdentifier(name, gen.nextIdentity))
-                // generate the assumption itself
-                val assumption = ScAssumed(assumptionIdent(), ScIdentifier("pure", gen.nextIdentity), synOperator, gen.nextIdentity)
-
-                val operator = ScModSemantics.freshIdent
-                /* (f x) -->
-                 * (letrec
-                 *   ((f (assumed purity pure f))
-                 *    (y old-y))
-                 *
-                 *   (f x)
-                 *   (given purity (= y old-y)))
-                 */
-                ScLetRec(
-                  List(operator.asInstanceOf[ScIdentifier]) ++ oldIdentifiers.map(_.apply()),
-                  List(assumption) ++ identifiers.map(_.apply()),
-                  ScBegin(
-                    List(ScFunctionAp(operator, synOperands, gen.nextIdentity)) ++
-                      identifiers.zip(oldIdentifiers).map { case (newIdent, oldIdent) =>
-                        ScGiven(assumptionIdent(),
-                                ScFunctionAp.primitive("equal?", List(newIdent.apply(), oldIdent.apply()), gen.nextIdentity),
-                                gen.nextIdentity
-                        )
-                      },
-                    gen.nextIdentity
-                  ),
-                  gen.nextIdentity
-                )
-              }
-            );
-          }
-        } >>
-          unit
-      }
-
-    }
-  }
 }

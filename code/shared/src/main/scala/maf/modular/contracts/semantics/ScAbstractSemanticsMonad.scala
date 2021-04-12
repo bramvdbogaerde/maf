@@ -123,6 +123,11 @@ trait ScAbstractSemanticsMonadAnalysis {
   def void[X]: ScEvalM[X] =
     ScEvalM(abstractMonadInstance.void)
 
+  def sequence1[X](xs: List[ScEvalM[X]]): ScEvalM[List[X]] = xs match {
+    case List() => void
+    case _      => sequence(xs)
+  }
+
   /**
    * Runs the given sequence of actions in the given order,
    * and collects their results in a list

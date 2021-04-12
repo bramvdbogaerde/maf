@@ -482,8 +482,9 @@ case class ScGiven(
  */
 case class ScAssumed(
     name: ScIdentifier,
-    simpleContract: ScExp,
+    simpleContract: ScIdentifier,
     expression: ScExp,
+    arguments: List[ScExp],
     idn: Identity)
     extends ScExp {
 

@@ -9,6 +9,7 @@ import maf.modular.contracts.semantics._
 import maf.modular.contracts.domain._
 import maf.modular.contracts._
 import maf.concolicbridge.ScModSemanticsCollaborativeTesting
+import maf.concolicbridge.assumptions._
 
 object SimpleScSemantics {
   val primitivesMap = Map(

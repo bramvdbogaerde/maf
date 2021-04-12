@@ -275,8 +275,9 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
   /** In the concrete execution, this does not have any effects */
   override def evalAssumed(
       name: ScIdentifier,
-      simpleContract: ScExp,
+      simpleContract: ScIdentifier,
       expr: ScExp,
+      arguments: List[ScExp],
       idn: Identity
     ): ScEvalM[PostValue] = eval(expr)
 
