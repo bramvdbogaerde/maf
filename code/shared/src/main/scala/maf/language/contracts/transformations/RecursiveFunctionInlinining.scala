@@ -8,8 +8,17 @@ import maf.concolicbridge.IdentityGenerator
  * Transforms the given function definition into a function definition that has been inlined (a few times).
  *  The transformation assumes that all variable names are unique and that no variable names shadow
  *  other variable names.
+ *
+ *  @param functionName the name of the recursive function
+ *  @param depth the maximum inlining depth of the recursive function
+ *  @param replaceWith a function that given the last recursive function call expression generates a new expression that will
+ *  be used to replace the last recursive function call. In order to preserve the semantics this should be the identity function
+ *  but it can also do replace it with something that does not preserve the semantics.
  */
-class RecursiveFunctionInlinining(functionName: String, depth: Int) { outer =>
+class RecursiveFunctionInlinining(
+    functionName: String,
+    depth: Int,
+    replaceWith: (ScExp, IdentityGenerator) => ScExp) { outer =>
   class Transformer(
       parameters: List[ScParam],
       body: ScBegin,
@@ -23,7 +32,7 @@ class RecursiveFunctionInlinining(functionName: String, depth: Int) { outer =>
       s""""inlining$ctr"""
     }
 
-    private var generator: IdentityGenerator = new IdentityGenerator(idn)
+    private val generator: IdentityGenerator = new IdentityGenerator(idn)
     private var depth: Int = outer.depth
 
     def transform(exp: ScExp): ScExp = exp match {
@@ -66,6 +75,9 @@ class RecursiveFunctionInlinining(functionName: String, depth: Int) { outer =>
         )
 
         outerletrec
+
+      case f @ ScFunctionAp(ScIdentifier(`functionName`, _), _, _, _) if depth == 0 =>
+        replaceWith(f, generator)
 
       case ScFunctionAp(operator, operands, idn, annotations) =>
         val tOp = transform(operator)
