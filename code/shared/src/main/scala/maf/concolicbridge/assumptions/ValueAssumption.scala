@@ -34,6 +34,7 @@ trait ValueAssumption extends AnalysisWithAssumptions { outer =>
           idn: Identity
         ): ScEvalM[PS] = {
         assert(arg.size >= 1)
+        println(exp)
         if (outer.isViolated(name)) {
           effectful {
             givensToNegate += name

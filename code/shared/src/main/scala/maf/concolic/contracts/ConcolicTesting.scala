@@ -318,8 +318,8 @@ abstract class ConcolicTesting(
   def violated: Set[String] = assumptionViolations.keySet
 
   override protected def throwAssumptionFailure(name: ScIdentifier, idn: Identity): ScEvalM[Unit] = {
-    assumptionViolations += (name.name -> idn)
-    super.throwAssumptionFailure(name, idn)
+    effectful { assumptionViolations += (name.name -> idn) } >>
+      super.throwAssumptionFailure(name, idn)
   }
 
   /** Overrides the original `call` to take the maximum recursion depth into account */

@@ -19,7 +19,7 @@ trait ScModSemanticsCollaborativeTesting extends ScModSemanticsScheme {
   override def intraAnalysis(component: Component): ScIntraAnalysisInstrumented
   var instrumenter: Instrumenter = Instrumenter(Map())
 
-  private var violatedAssumptions: Set[String] = Set()
+  protected var violatedAssumptions: Set[String] = Set()
   private var verifiedAssumptions: Set[String] = Set()
   private var assumptions: Set[String] = Set()
   private var retry: Set[String] = Set()
@@ -30,12 +30,12 @@ trait ScModSemanticsCollaborativeTesting extends ScModSemanticsScheme {
   }
 
   /** Register the given assumption as being violated */
-  def violated(name: String): Unit = {
+  def registerViolated(name: String): Unit = {
     violatedAssumptions += name
   }
 
   /** Registers the given assumption as being verified */
-  def verified(name: String): Unit = {
+  def registerVerified(name: String): Unit = {
     verifiedAssumptions += name
   }
 

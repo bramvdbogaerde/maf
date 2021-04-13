@@ -35,8 +35,9 @@ abstract class ConcolicBridge(exp: ScExp) {
 
     // first we create a new analysis instance and run it
     val analysis = modAnalysis(exp)
-    verified.foreach(analysis.verified)
-    violated.foreach(analysis.violated)
+    verified.foreach(analysis.registerVerified)
+    println(s"Adding violated assumptions ${violated}")
+    violated.foreach(v => analysis.registerViolated(v))
     analysis.tracker = tracker
     disabled.foreach(analysis.disableAssumption)
 
@@ -53,7 +54,7 @@ abstract class ConcolicBridge(exp: ScExp) {
       val tester = concolicTester(instrumented)
       tester.analyzeWithTimeout(timeout)
 
-      val newVerified = analysis.assumed -- tester.violated
+      val newVerified = analysis.tracker.allAssumptions -- tester.violated
 
       // only continue to the next run if the violations or verified set
       // changes

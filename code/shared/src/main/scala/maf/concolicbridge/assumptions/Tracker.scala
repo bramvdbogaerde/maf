@@ -34,6 +34,8 @@ class Tracker(private var assumptions: Map[String, List[Identity]] = Map()) {
   def contains(assumption: String, identity: Identity): Boolean =
     assumptions.get(assumption).getOrElse(List()).contains(identity)
 
+  def allAssumptions: Set[String] = assumptions.keySet
+
   /**
    * Create a clone of the current tracker
    *
