@@ -3,6 +3,7 @@ package maf.modular.contracts
 import maf.language.contracts.{ScExp, ScFunctionAp, ScIdentifier, ScNil, ScValue}
 import maf.language.sexp.Value
 import maf.language.scheme.interpreter.ConcreteValues
+import maf.ScSettings
 
 /**
  * Transforms a condition built using basic predicates from the soft contract language
@@ -16,7 +17,7 @@ class ScSMTSolverJVM[V](
     injectValue: ConcreteValues.Value => Option[V] = ((_: ConcreteValues.Value) => None))
     extends ScSmtSolver {
 
-  val DEBUG_MODE = false
+  val DEBUG_MODE = ScSettings.DEBUG_SMT
 
   import com.microsoft.z3._
   import ScSMTSolverJVM._
@@ -274,13 +275,15 @@ class ScSMTSolverJVM[V](
 
     val model = solver.getModel()
     val constantsDecls = funDecls(symbols)
-    val result = constantsDecls.map(model.getConstInterp(_))
+    val result = constantsDecls.map(model.getConstInterp(_)).filterNot(_ == null)
     val values: Array[Value] = result
       .map(u =>
         u.getFuncDecl().getName().toString match {
           case "VInt"  => Value.Integer(u.getArgs()(0).asInstanceOf[IntNum].getInt())
           case "VBool" => Value.Bool(u.getArgs()(0).asInstanceOf[BoolExpr].isTrue())
-          case _       => ???
+          case v =>
+            println(v)
+            ???
         }
       )
 
