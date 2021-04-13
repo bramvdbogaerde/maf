@@ -1,6 +1,7 @@
 package maf.concolicbridge
 
 import maf.modular.contracts.semantics.ScModSemanticsScheme
+import maf.util.benchmarks.Timeout
 
 trait ScModSemanticsCollaborativeTesting extends ScModSemanticsScheme {
   override def intraAnalysis(component: Component): ScIntraAnalysisInstrumented
@@ -9,6 +10,7 @@ trait ScModSemanticsCollaborativeTesting extends ScModSemanticsScheme {
   private var violatedAssumptions: Set[String] = Set()
   private var verifiedAssumptions: Set[String] = Set()
   private var assumptions: Set[String] = Set()
+  private var retry: Set[String] = Set()
 
   def withInstrumenter(f: Instrumenter => Instrumenter): Unit = {
     instrumenter = f(instrumenter)
@@ -30,6 +32,11 @@ trait ScModSemanticsCollaborativeTesting extends ScModSemanticsScheme {
     assumptions += name
   }
 
+  /** Retries an assumption with the given name */
+  def retry(name: String): Unit = {
+    retry += name
+  }
+
   /** Returns true if the given assumption is violated */
   def isViolated(name: String): Boolean =
     violatedAssumptions.contains(name)
@@ -46,6 +53,17 @@ trait ScModSemanticsCollaborativeTesting extends ScModSemanticsScheme {
 
   /** Returns the set of made assumptions */
   def assumed: Set[String] = assumptions
+
+  protected def commit(): Unit = {
+    violatedAssumptions = violated -- retry
+    assumptions = assumptions ++ retry
+    retry = Set()
+  }
+
+  abstract override def analyzeWithTimeout(timeout: Timeout.T): Unit = {
+    super.analyzeWithTimeout(timeout)
+    commit()
+  }
 
   trait ScIntraAnalysisInstrumented extends IntraScAnalysisScheme
 }

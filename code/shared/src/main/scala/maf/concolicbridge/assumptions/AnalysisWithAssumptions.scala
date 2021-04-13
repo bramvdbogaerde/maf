@@ -8,16 +8,24 @@ import maf.core.Identity
 import maf.language.contracts.ScLattice.AssumedValue
 import maf.language.contracts.ScNil
 
-trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanticsCollaborativeTesting {
+trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanticsCollaborativeTesting { outer =>
   override def intraAnalysis(component: Component): AnalysisWithAssumptionsIntra
 
   trait AnalysisWithAssumptionsIntra extends ScIntraAnalysisInstrumented with IntraScBigStepSemantics {
     trait Assumption {
       def run(
+          name: String,
           exp: ScExp,
           arg: List[ScExp],
           idn: Identity
         ): ScEvalM[PostValue]
+
+      def isViolated(
+          name: String,
+          _exp: ScExp,
+          _args: List[ScExp]
+        ): Boolean =
+        outer.isViolated(name)
     }
 
     object Assumption {
@@ -43,6 +51,7 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
      */
     case class TaggedAssumption(tag: String) extends Assumption {
       def run(
+          name: String,
           exp: ScExp,
           args: List[ScExp],
           idn: Identity
@@ -65,11 +74,12 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
 
     protected def runAssumption(
         name: String,
+        assumptionName: String,
         exp: ScExp,
         arguments: List[ScExp],
         idn: Identity
       ): ScEvalM[PostValue] = {
-      availableAssumptions(name).run(exp, arguments, idn)
+      availableAssumptions(assumptionName).run(name, exp, arguments, idn)
     }
 
     override def evalAssumed(
@@ -79,12 +89,13 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
         arguments: List[ScExp],
         idn: Identity
       ): ScEvalM[PostValue] = {
-      if (isViolated(name.name)) {
+      val assumption = availableAssumptions(simpleContract.name)
+      if (assumption.isViolated(name.name, expr, arguments)) {
         // if the assumption was proven to be violated, then
         // we no longer make the assumption
         eval(expr)
       } else {
-        runAssumption(name.name, expr, arguments, idn)
+        runAssumption(simpleContract.name, name.name, expr, arguments, idn)
       }
     }
   }
