@@ -37,7 +37,12 @@ trait PurityAssumption extends AnalysisWithAssumptions {
       super.evalFunctionApHook(operator, operand, synOperator, synOperands, idn) >> {
         // first check whether the operator is an assumed value
         // if it is we will not assume anything else. TODO: check only for purity here
-        if (lattice.isDefinitivelyAssumedValue(operator.pure) || lattice.getClosure(operator.pure).size < 1 || tracker.contains("pure", idn)) {
+        if (
+          lattice.isDefinitivelyAssumedValue(operator.pure) ||
+          lattice.getClosure(operator.pure).size < 1 ||
+          tracker.contains("pure", idn) ||
+          !Assumption.enabled("pure")
+        ) {
           unit
         } else {
           effectful {

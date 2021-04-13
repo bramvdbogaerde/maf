@@ -14,7 +14,8 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
   private var enabledAssumptions: Map[String, Boolean] = Map(
     "pure" -> true,
     "value" -> true,
-    "inline" -> true
+    "inline" -> true,
+    "nondetif" -> true
   )
 
   trait AnalysisWithAssumptionsIntra extends ScIntraAnalysisInstrumented with IntraScBigStepSemantics {
@@ -43,6 +44,9 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
     }
 
     object Assumption {
+      def enabled(name: String): Boolean =
+        availableAssumptions(name).isEnabled
+
       def hasTag(value: PostValue, tag: String): Set[ScEvalM[PostValue]] = {
         lattice
           .getAssumedValues(value.pure)
@@ -80,6 +84,30 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
           _ <- write(symbolAddr, (lattice.schemeLattice.symbol(tag), ScNil()))
         } yield (lattice.assumedValue(AssumedValue(symbolAddr, exprAddr)), ScNil())
       }
+    }
+
+    /**
+     *  An assumption that transforms code and might generate assumptions
+     *  from another type
+     */
+    class TransformationAssumption(val name: String) extends Assumption {
+      def run(
+          name: String,
+          exp: ScExp,
+          arg: List[ScExp],
+          idn: Identity
+        ): ScEvalM[PS] = ??? // shouldn't be possible
+
+      /**
+       * We never actually want to run the assumption
+       *  because it is supposed to generate assumptions from other
+       *  types
+       */
+      override def isViolated(
+          name: String,
+          _exp: ScExp,
+          _args: List[ScExp]
+        ): Boolean = true
     }
 
     private var availableAssumptions: Map[String, Assumption] = Map()

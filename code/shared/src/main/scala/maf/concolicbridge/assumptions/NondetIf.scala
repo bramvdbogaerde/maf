@@ -16,6 +16,9 @@ trait NondetIf extends AnalysisWithAssumptions {
   override def intraAnalysis(component: Component): NondetIfIntra
 
   trait NondetIfIntra extends AnalysisWithAssumptionsIntra {
+    case object NondetAssumption extends TransformationAssumption("nondetif")
+    registerAssumption("nondetif", NondetAssumption)
+
     private def assumeConditional(
         condition: ScExp,
         consequent: ScExp,
@@ -62,7 +65,7 @@ trait NondetIf extends AnalysisWithAssumptions {
             val f = feasible(primFalse, value)(pc)
             (t, f)
           }.flatMap {
-            case (Right(_), Right(_)) if !tracker.contains("value", idn) =>
+            case (Right(_), Right(_)) if !tracker.contains("value", idn) && Assumption.enabled("nondetif") =>
               // both branches are "possible" source of non determinism
               effectful { assumeConditional(condition, consequent, alternative, idn) } >> unit
             case (_, _) => unit // all other cases
