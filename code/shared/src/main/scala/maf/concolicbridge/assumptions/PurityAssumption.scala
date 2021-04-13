@@ -63,6 +63,24 @@ trait PurityAssumption extends AnalysisWithAssumptions {
                 val assumption = ScAssumed(assumptionIdent(), ScIdentifier("pure", gen.nextIdentity), synOperator, List(), gen.nextIdentity)
 
                 val operator = ScModSemantics.freshIdent
+
+                val resVar = ScModSemantics.genSym
+                val resVarIdent = () => ScIdentifier(resVar, gen.nextIdentity)
+                val functionAp = ScLetRec(
+                  List(resVarIdent()),
+                  List(ScFunctionAp(operator, synOperands, gen.nextIdentity)),
+                  ScBegin(
+                    identifiers.zip(oldIdentifiers).map { case (newIdent, oldIdent) =>
+                      ScGiven(assumptionIdent(),
+                              ScFunctionAp.primitive("equal?", List(newIdent.apply(), oldIdent.apply()), gen.nextIdentity),
+                              gen.nextIdentity
+                      )
+                    } ++ List(resVarIdent()),
+                    gen.nextIdentity
+                  ),
+                  gen.nextIdentity
+                )
+
                 /* (f x) -->
                  * (letrec
                  *   ((f (assumed purity pure f))
@@ -74,15 +92,7 @@ trait PurityAssumption extends AnalysisWithAssumptions {
                 ScLetRec(
                   List(operator.asInstanceOf[ScIdentifier]) ++ oldIdentifiers.map(_.apply()),
                   List(assumption) ++ identifiers.map(_.apply()),
-                  ScBegin(
-                    identifiers.zip(oldIdentifiers).map { case (newIdent, oldIdent) =>
-                      ScGiven(assumptionIdent(),
-                              ScFunctionAp.primitive("equal?", List(newIdent.apply(), oldIdent.apply()), gen.nextIdentity),
-                              gen.nextIdentity
-                      )
-                    } ++ List(ScFunctionAp(operator, synOperands, gen.nextIdentity)),
-                    gen.nextIdentity
-                  ),
+                  functionAp,
                   gen.nextIdentity
                 )
               }
