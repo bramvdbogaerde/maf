@@ -22,6 +22,7 @@ trait NondetIf extends AnalysisWithAssumptions {
         alternative: ScExp,
         idn: Identity
       ): Unit = {
+      tracker.add("value", idn)
       withInstrumenter { instrumenter =>
         val name = ScModSemantics.genSym
         instrumenter.replaceAt(
@@ -61,7 +62,7 @@ trait NondetIf extends AnalysisWithAssumptions {
             val f = feasible(primFalse, value)(pc)
             (t, f)
           }.flatMap {
-            case (Right(_), Right(_)) =>
+            case (Right(_), Right(_)) if !tracker.contains("value", idn) =>
               // both branches are "possible" source of non determinism
               effectful { assumeConditional(condition, consequent, alternative, idn) } >> unit
             case (_, _) => unit // all other cases

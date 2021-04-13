@@ -3,6 +3,7 @@ package maf.concolicbridge
 import maf.language.contracts.ScExp
 import maf.concolic.contracts.ConcolicTesting
 import maf.util.benchmarks.Timeout
+import maf.concolicbridge.assumptions.Tracker
 
 /** A type of analysis that combines concolic testing with the static analyser */
 abstract class ConcolicBridge(exp: ScExp) {
@@ -19,7 +20,8 @@ abstract class ConcolicBridge(exp: ScExp) {
       exp: ScExp,
       timeout: Timeout.T,
       verified: Set[String] = Set(),
-      violated: Set[String] = Set()
+      violated: Set[String] = Set(),
+      tracker: Tracker = Tracker()
     ): Unit = {
     if (timeout.reached) {
       throw new Exception("timeout reached")
@@ -29,6 +31,8 @@ abstract class ConcolicBridge(exp: ScExp) {
     val analysis = modAnalysis(exp)
     verified.foreach(analysis.verified)
     violated.foreach(analysis.violated)
+    analysis.tracker = tracker
+
     analysis.analyzeWithTimeout(timeout)
 
     // then we apply any instrumentation that might have been
@@ -48,7 +52,7 @@ abstract class ConcolicBridge(exp: ScExp) {
       // changes
       if (newVerified != verified || violated != tester.violated) {
         // continue to the next run
-        analysisRun(instrumented, timeout, newVerified, tester.violated)
+        analysisRun(instrumented, timeout, newVerified, tester.violated, analysis.copyTracker)
       }
     }
   }

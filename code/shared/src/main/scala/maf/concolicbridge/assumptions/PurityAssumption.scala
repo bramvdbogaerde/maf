@@ -36,10 +36,11 @@ trait PurityAssumption extends AnalysisWithAssumptions {
       ): ScEvalM[Unit] = {
       // first check whether the operator is an assumed value
       // if it is we will not assume anything else. TODO: check only for purity here
-      if (lattice.isDefinitivelyAssumedValue(operator.pure) || lattice.getClosure(operator.pure).size < 1) {
+      if (lattice.isDefinitivelyAssumedValue(operator.pure) || lattice.getClosure(operator.pure).size < 1 || tracker.contains("pure", idn)) {
         unit
       } else {
         effectful {
+          tracker.add("pure", idn)
           withInstrumenter { instrumenter =>
             // generate the name of the assumption
             val assumptionName = ScModSemantics.genSym

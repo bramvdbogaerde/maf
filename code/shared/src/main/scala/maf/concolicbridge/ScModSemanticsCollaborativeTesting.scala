@@ -2,6 +2,7 @@ package maf.concolicbridge
 
 import maf.modular.contracts.semantics.ScModSemanticsScheme
 import maf.util.benchmarks.Timeout
+import maf.concolicbridge.assumptions.Tracker
 
 trait ScModSemanticsCollaborativeTesting extends ScModSemanticsScheme {
   override def intraAnalysis(component: Component): ScIntraAnalysisInstrumented
@@ -11,6 +12,7 @@ trait ScModSemanticsCollaborativeTesting extends ScModSemanticsScheme {
   private var verifiedAssumptions: Set[String] = Set()
   private var assumptions: Set[String] = Set()
   private var retry: Set[String] = Set()
+  protected var _tracker: Tracker = Tracker()
 
   def withInstrumenter(f: Instrumenter => Instrumenter): Unit = {
     instrumenter = f(instrumenter)
@@ -31,6 +33,16 @@ trait ScModSemanticsCollaborativeTesting extends ScModSemanticsScheme {
     // TODO: check whether the assumption already exists and consider throwing an error
     assumptions += name
   }
+
+  /** Set the tracker */
+  def tracker_=(tracker: Tracker): Unit =
+    this._tracker = tracker
+
+  /** Retrieve the current tracker */
+  def tracker: Tracker = this._tracker
+
+  /** Get a copy of the current tracker */
+  def copyTracker: Tracker = tracker.copy
 
   /** Retries an assumption with the given name */
   def retry(name: String): Unit = {
