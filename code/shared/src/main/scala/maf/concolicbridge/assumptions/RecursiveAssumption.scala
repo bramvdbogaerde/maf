@@ -98,12 +98,13 @@ trait RecursiveAssumption extends ScBigStepSemanticsScheme with ScModSemanticsCo
      *  (1) determine heuristically whether we can apply this function (i.e., we are calling a recursive function but we are not ourselves a recursive function)
      *  (2) Call the inlined recursive function (this is indicated with the inlined assumption) without creating a new component
      */
-    override def applyFnHook(
+    abstract override def applyFnHook(
         operator: PostValue,
         operands: List[PostValue],
         syntacticOperator: ScExp,
         syntacticOperands: List[ScExp]
       ): Set[ScEvalM[PostValue]] = {
+      val superHooks = super.applyFnHook(operator, operands, syntacticOperator, syntacticOperands)
       // first detect whether we are calling a recursive function, but are not
       // recursive ourselves
       val isSelfRecursive = isRecursive(component)
@@ -116,7 +117,7 @@ trait RecursiveAssumption extends ScBigStepSemanticsScheme with ScModSemanticsCo
       }
 
       // TODO: call the inlined function without creating a new component
-      Set()
+      Set() ++ superHooks
     }
   }
 }

@@ -11,8 +11,18 @@ import maf.language.contracts.ScNil
 trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanticsCollaborativeTesting { outer =>
   override def intraAnalysis(component: Component): AnalysisWithAssumptionsIntra
 
+  private var enabledAssumptions: Map[String, Boolean] = Map(
+    "pure" -> true,
+    "value" -> true,
+    "inline" -> true
+  )
+
   trait AnalysisWithAssumptionsIntra extends ScIntraAnalysisInstrumented with IntraScBigStepSemantics {
     trait Assumption {
+
+      /** The name of the assumption (e.g., pure, value, ...) */
+      def name: String
+
       def run(
           name: String,
           exp: ScExp,
@@ -26,6 +36,10 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
           _args: List[ScExp]
         ): Boolean =
         outer.isViolated(name)
+
+      def isEnabled: Boolean =
+        enabledAssumptions(name)
+
     }
 
     object Assumption {
@@ -50,6 +64,7 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
      * tags it with the name of the assumption. Does not expect any arguments.
      */
     case class TaggedAssumption(tag: String) extends Assumption {
+      def name: String = tag
       def run(
           name: String,
           exp: ScExp,
@@ -90,7 +105,7 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
         idn: Identity
       ): ScEvalM[PostValue] = {
       val assumption = availableAssumptions(simpleContract.name)
-      if (assumption.isViolated(name.name, expr, arguments)) {
+      if (assumption.isViolated(name.name, expr, arguments) || !assumption.isEnabled) {
         // if the assumption was proven to be violated, then
         // we no longer make the assumption
         eval(expr)

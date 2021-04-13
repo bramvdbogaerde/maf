@@ -26,6 +26,7 @@ trait ValueAssumption extends AnalysisWithAssumptions { outer =>
 
   trait ValueAssumptionIntra extends AnalysisWithAssumptionsIntra {
     object ValueAssumption extends Assumption {
+      def name: String = "value"
       override def run(
           name: String,
           exp: ScExp,
