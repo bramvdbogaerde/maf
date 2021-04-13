@@ -8,6 +8,7 @@ import maf.language.sexp.Value
 import maf.modular.contracts._
 import maf.concolicbridge.ScModSemanticsCollaborativeTesting
 import maf.core.Address
+import maf.ScSettings
 
 /**
  * This trait provides some methods that are useful for the semantics
@@ -808,7 +809,7 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
       p.f
         .call(p.e, args.map(arg => (arg.e, arg.v.pure)), adapter, this)
         .map { case (v, store) =>
-          val ps = new PS((v, ScFunctionAp.primitive(p.f.name, args.map(_.e), p.e.idn)))
+          val ps = new PS((v, ScFunctionAp.primitive(p.f.name, args.map(_.v.symbolic), p.e.idn)))
           (ps, StoreWrapper.unwrap(store).asInstanceOf[StoreCacheAdapter])
         }
         .getOrElse((value(lattice.bottom), adapter))
@@ -996,8 +997,11 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
       // bind the primitives to their symbolic counterparts in the store
       primBindings.foreach { case (name, addr) =>
         val value = readPure(addr, storeCache)
-        storeCache = StoreMap(storeCache + (addr -> ((value, ScIdentifier(name, Identity.none)))))
-        storeCache = StoreMap(storeCache.map + (ScPrimAddr(name) -> ((lattice.schemeLattice.primitive(name), ScIdentifier(name, Identity.none)))))
+        val primName =
+          if (ScSettings.ENABLE_PRIMITIVE_SYMBOLS) ScIdentifier(name, Identity.none) else ScNil()
+
+        storeCache = StoreMap(storeCache + (addr -> ((value, primName))))
+        storeCache = StoreMap(storeCache.map + (ScPrimAddr(name) -> ((lattice.schemeLattice.primitive(name), primName))))
       }
 
       fnEnv.mapAddrs { (addr) =>

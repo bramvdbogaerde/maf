@@ -8,6 +8,12 @@ import maf.concolicbridge.assumptions.Tracker
 /** A type of analysis that combines concolic testing with the static analyser */
 abstract class ConcolicBridge(exp: ScExp) {
 
+  /** Set of disabled assumptions */
+  private var disabled: Set[String] = Set()
+  def disable(assumption: String): Unit = {
+    disabled += assumption
+  }
+
   /** A modular analysis that will be used for analysing the program/ */
   def modAnalysis(exp: ScExp): ScModSemanticsCollaborativeTesting
 
@@ -32,6 +38,7 @@ abstract class ConcolicBridge(exp: ScExp) {
     verified.foreach(analysis.verified)
     violated.foreach(analysis.violated)
     analysis.tracker = tracker
+    disabled.foreach(analysis.disableAssumption)
 
     analysis.analyzeWithTimeout(timeout)
 

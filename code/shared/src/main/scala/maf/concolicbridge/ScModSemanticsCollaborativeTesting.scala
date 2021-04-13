@@ -5,6 +5,17 @@ import maf.util.benchmarks.Timeout
 import maf.concolicbridge.assumptions.Tracker
 
 trait ScModSemanticsCollaborativeTesting extends ScModSemanticsScheme {
+  protected var enabledAssumptions: Map[String, Boolean] = Map(
+    "pure" -> true,
+    "value" -> true,
+    "inline" -> true,
+    "nondetif" -> true
+  )
+
+  def disableAssumption(name: String): Unit = {
+    enabledAssumptions = enabledAssumptions.updated(name, false)
+  }
+
   override def intraAnalysis(component: Component): ScIntraAnalysisInstrumented
   var instrumenter: Instrumenter = Instrumenter(Map())
 

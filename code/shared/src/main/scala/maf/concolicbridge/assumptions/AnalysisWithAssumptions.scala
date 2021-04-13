@@ -11,13 +11,6 @@ import maf.language.contracts.ScNil
 trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanticsCollaborativeTesting { outer =>
   override def intraAnalysis(component: Component): AnalysisWithAssumptionsIntra
 
-  private var enabledAssumptions: Map[String, Boolean] = Map(
-    "pure" -> true,
-    "value" -> true,
-    "inline" -> true,
-    "nondetif" -> true
-  )
-
   trait AnalysisWithAssumptionsIntra extends ScIntraAnalysisInstrumented with IntraScBigStepSemantics {
     trait Assumption {
 
