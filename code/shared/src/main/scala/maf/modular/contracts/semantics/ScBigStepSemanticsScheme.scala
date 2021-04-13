@@ -200,7 +200,7 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
   private var totalRuns = 0
   def eval(expr: ScExp): ScEvalM[PostValue] = (expr match {
     case ScBegin(expressions, _)                              => evalSequence(expressions)
-    case ScIf(condition, consequent, alternative, _)          => evalIf(condition, consequent, alternative)
+    case ScIf(condition, consequent, alternative, idn)        => evalIf(condition, consequent, alternative, idn)
     case ScLetRec(idents, bindings, body, _)                  => evalLetRec(idents, bindings, body)
     case ScRaise(_, _)                                        => ???
     case ScSet(variable, value, _)                            => evalSet(variable, value)
@@ -468,7 +468,8 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
   def evalIf(
       condition: ScExp,
       consequent: ScExp,
-      alternative: ScExp
+      alternative: ScExp,
+      idn: Identity
     ): ScEvalM[PostValue] =
     eval(condition).flatMap((value) => conditional(value, condition, consequent, alternative))
 
