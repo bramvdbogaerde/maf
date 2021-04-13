@@ -19,13 +19,13 @@ trait PurityAssumption extends AnalysisWithAssumptions {
       ): Set[ScEvalM[PostValue]] =
       Assumption
         .hasTag(operator, "pure")
-        .map(result =>
+        .map(result => {
           result.flatMap(value =>
             nondets(lattice.getClosure(value.pure).map { closure =>
               call(closure, operands, syntacticOperands, false)
             })
           )
-        )
+        })
 
     override def evalFunctionApHook(
         operator: PostValue,
@@ -75,13 +75,12 @@ trait PurityAssumption extends AnalysisWithAssumptions {
                   List(operator.asInstanceOf[ScIdentifier]) ++ oldIdentifiers.map(_.apply()),
                   List(assumption) ++ identifiers.map(_.apply()),
                   ScBegin(
-                    List(ScFunctionAp(operator, synOperands, gen.nextIdentity)) ++
-                      identifiers.zip(oldIdentifiers).map { case (newIdent, oldIdent) =>
-                        ScGiven(assumptionIdent(),
-                                ScFunctionAp.primitive("equal?", List(newIdent.apply(), oldIdent.apply()), gen.nextIdentity),
-                                gen.nextIdentity
-                        )
-                      },
+                    identifiers.zip(oldIdentifiers).map { case (newIdent, oldIdent) =>
+                      ScGiven(assumptionIdent(),
+                              ScFunctionAp.primitive("equal?", List(newIdent.apply(), oldIdent.apply()), gen.nextIdentity),
+                              gen.nextIdentity
+                      )
+                    } ++ List(ScFunctionAp(operator, synOperands, gen.nextIdentity)),
                     gen.nextIdentity
                   ),
                   gen.nextIdentity

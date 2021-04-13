@@ -32,16 +32,16 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
       def hasTag(value: PostValue, tag: String): Set[ScEvalM[PostValue]] = {
         lattice
           .getAssumedValues(value.pure)
-          .map(ass =>
+          .map(ass => {
             read(ass.simpleContract)
-              .flatMap(value =>
+              .flatMap(value => {
                 if (value.pure == lattice.schemeLattice.symbol(tag)) {
                   read(ass.value)
                 } else {
                   void
                 }
-              )
-          )
+              })
+          })
       }
     }
 
@@ -95,7 +95,7 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
         // we no longer make the assumption
         eval(expr)
       } else {
-        runAssumption(simpleContract.name, name.name, expr, arguments, idn)
+        runAssumption(name.name, simpleContract.name, expr, arguments, idn)
       }
     }
   }

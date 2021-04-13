@@ -556,7 +556,7 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
     val thunk = lattice.getThunk(operator.pure).map(t => read(t.value))
 
     for {
-      value <- nondets(primitiveAp ++ cloAp ++ arrAp ++ flatAp ++ opqAp ++ thunk)
+      value <- nondets(primitiveAp ++ cloAp ++ arrAp ++ flatAp ++ opqAp ++ thunk ++ fromHook)
       // TODO: also remove other potentially captured variables
       // conservatively remove variables from lambdas passed to the called function from the store cache.
       // this is necessary because these lambdas could be applied any number of times by the other functions
@@ -964,6 +964,10 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
         _ <- effectful(if (GLOBAL_STORE_ENABLED) writeAddr(addr, value._1))
         _ <- writeLocal(addr, value)
       } yield ()
+
+    override def read(addr: Addr): ScEvalM[PostValue] = withStoreCache { cache =>
+      cache.lookup(addr).map(v => pure(v)).getOrElse(result(readAddr(addr)))
+    }
 
     override def writeLocalForce(addr: Addr, value: PostValue): ScEvalM[Unit] =
       addToCache(addr -> value)

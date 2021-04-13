@@ -114,6 +114,10 @@ case class Instrumenter(replacementNodes: Map[Identity, (IdentityGenerator, ScEx
           val instrumentedContracts = contracts.map(run)
           ScProvideContracts(variables, instrumentedContracts, idn)
 
+        case ScGiven(name, exp, idn) =>
+          val instrumentedExp = run(exp)
+          ScGiven(name, instrumentedExp, idn)
+
         case ScCar(pai, idn) =>
           val instrumentedPai = run(pai)
           ScCar(instrumentedPai, idn)
