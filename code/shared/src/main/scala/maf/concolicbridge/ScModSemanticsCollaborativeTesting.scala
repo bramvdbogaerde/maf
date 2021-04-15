@@ -9,7 +9,9 @@ trait ScModSemanticsCollaborativeTesting extends ScModSemanticsScheme {
     "pure" -> true,
     "value" -> true,
     "inline" -> true,
-    "nondetif" -> true
+    "nondetif" -> true,
+    "holds" -> true,
+    "nonblame" -> true
   )
 
   def disableAssumption(name: String): Unit = {

@@ -83,12 +83,13 @@ trait ScAbstractValues[A <: Address] {
     }
 
     def isRefinedOpq(value: ValueExt, refinements: Set[String]): Boolean = value match {
-      case Opqs(opq) => opq.forall(o => o.refinementSet.intersect(refinements).nonEmpty)
-      case _         => false
+      case Opqs(opq) =>
+        opq.forall(o => o.refinementSet.intersect(refinements).nonEmpty)
+      case _ => false
     }
 
     def isArithmeticOperand(value: ValueExt): Boolean =
-      isRefinedOpq(value, Set("integer?", "real?"))
+      isRefinedOpq(value, Set("integer?", "real?", "number?"))
 
     def isOpqInteger(value: ValueExt): Boolean =
       isRefinedOpq(value, Set("integer?"))

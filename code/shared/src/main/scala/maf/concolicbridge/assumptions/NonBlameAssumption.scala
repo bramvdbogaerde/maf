@@ -33,7 +33,7 @@ trait NonBlameAssumption extends AnalysisWithAssumptions {
         val f = feasible(primFalse, value)(pc)
         t.isRight && f.isRight
       } >>= { checked =>
-        if (domainContract.isDefined && checked && !tracker.contains("nonblame", blamedIdentity)) {
+        if (domainContract.isDefined && checked && !tracker.contains("nonblame", blamedIdentity) && Assumption.enabled("nonblame")) {
           tracker.add("nonblame", blamedIdentity)
           // if it cannot be determined whether the contract is valid or not, then we try to assume it is
           effectful {
@@ -58,7 +58,8 @@ trait NonBlameAssumption extends AnalysisWithAssumptions {
                           gen.nextIdentity
                         ),
                         gen.nextIdentity
-                      )
+                      ),
+                      exp
                     ),
                     gen.nextIdentity
                   )

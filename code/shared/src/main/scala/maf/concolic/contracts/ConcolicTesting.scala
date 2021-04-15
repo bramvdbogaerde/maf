@@ -205,6 +205,28 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
   override def throwBlameError(blame: ScLattice.Blame): ScEvalM[Unit] =
     error(ConcTree.blame(BlameValue(blame)))
 
+  override def eval(expr: ScExp): ScEvalM[PostValue] =
+    expr match {
+      // this is not implemented as a primitive because the primitives in
+      // the concolic tester do not have access to the store
+      case ScFunctionAp(ScIdentifier("domain-contract", _), List(contract, n), _, _) =>
+        for {
+          evaluatedContract <- eval(contract)
+          evaluatedN <- eval(n)
+          domain <- {
+            val n = evaluatedN.pure.asInstanceOf[ConcreteValues.Value.Integer]
+            val arr = evaluatedContract.pure.asInstanceOf[ArrValue]
+            read(arr.arr.contract)
+              .flatMap(grd => read(grd.pure.asInstanceOf[GrdValue].grd.domain(n.n.toInt)))
+          }
+        } yield domain
+
+      case ScFunctionAp(ScIdentifier("domain-contract", _), args, _, _) =>
+        throw new Exception(s"domain-contract: arity mismatch, expected 2 but got ${args.size} arguments")
+
+      case _ => super.eval(expr)
+    }
+
   override def callPrimitive(p: PrimitiveOperator, args: List[Argument]): ScEvalM[PostValue] = for {
     // install the current store
     _ <- withStoreCache { store => interop.lstore = store; unit }

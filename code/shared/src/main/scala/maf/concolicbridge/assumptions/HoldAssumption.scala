@@ -27,7 +27,7 @@ trait HoldsAssumptionAnalysis extends AnalysisWithAssumptions {
 
       Assumption.checkTag(expressionValue, "holds") >>= { checked =>
         if (lattice.isDefinitivelyAssumedValue(expressionValue.pure) && checked) {
-          // we assume that the contract holds, nothing to check
+          // we assume that the contract holds, nothing to check, TODO: but we will extend the path condition
           pure(expressionValue)
         } else {
           super.monFlat(contract, expressionValue, blamedIdentity, blamingIdentity, doBlame, syntacticExpression)

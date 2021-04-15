@@ -36,7 +36,7 @@ case class ProductLattice[V <: Ordable](vs: List[V]) extends SmartHash {
     if (vs.isEmpty) {
       "⊥"
     } else if (vs.tail.isEmpty) {
-      vs.head.toString
+      "{" + vs.head.toString + "}"
     } else {
       vs.map(_.toString).sorted.mkString("{", ",", "}")
     }
@@ -45,7 +45,7 @@ case class ProductLattice[V <: Ordable](vs: List[V]) extends SmartHash {
     vs.foldLeft(monoid.zero)((acc, x) => monoid.append(acc, f(x)))
 
   def contains(f: V => Boolean): Boolean =
-    vs.contains(v => f(v))
+    vs.exists(f)
 
 }
 

@@ -537,7 +537,7 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
         }
 
         values <- sequence {
-          contract.domain.map(read).zip(operands.zip(syntacticOperands.zip(LazyList.from(1)))).map { case (domain, (value, (syn, n))) =>
+          contract.domain.map(read).zip(operands.zip(syntacticOperands.zip(LazyList.from(0)))).map { case (domain, (value, (syn, n))) =>
             domain.flatMap(d => applyMon(d, value, arr.contract.idn, syn.idn, Some(syntacticOperator), Some(n)))
           }
         }
@@ -594,7 +594,7 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
 
     // flat contract
     val flatContract = ifFeasible(primProc, evaluatedContract) {
-      monFlat(evaluatedContract, evaluatedExpression, exprIdn, contractIdn)
+      monFlat(evaluatedContract, evaluatedExpression, exprIdn, contractIdn, true, None, operator, domainContract)
     }
 
     // dependent contract

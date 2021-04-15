@@ -75,7 +75,7 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
       private def arithOp(operation: SchemeOp)(left: V, right: V): MayFail[V, maf.core.Error] = (left.right, right.right) match {
         case (`rightBottom`, _) if left.left.contains(Values.isArithmeticOperand) =>
           op(operation)(List(Product2.injectRight(rightLattice.numTop), right))
-        case (_, `rightBottom`) if left.left.contains(Values.isArithmeticOperand) =>
+        case (_, `rightBottom`) if right.left.contains(Values.isArithmeticOperand) =>
           op(operation)(List(left, Product2.injectRight(rightLattice.numTop)))
         case _ =>
           super.op(operation)(List(left, right))
@@ -95,8 +95,14 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
         import SchemeOp._
         operation.checkArity(args)
         operation match {
-          case Plus | Minus | Times | Quotient | Div =>
+          case Plus | Minus | Times | Quotient | Div | Lt =>
             arithOp(operation)(args(0), args(1))
+
+          case IsInteger =>
+            mayFailJoin(
+              rightLattice.op(IsInteger)(args.map(_.right)).map(v => Product2.injectRight(v)),
+              MayFail.success(schemeLattice.bool(args(0).left.contains(v => Values.isRefinedOpq(v, Set("number?", "integer?", "int?")))))
+            )
 
           // Computations on leftLattice values that return values from the Product2lattice
           case _ =>
@@ -296,7 +302,7 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
                     .foldLeft(false)((a, b) => b.map(v => a || schemeLattice.isTrue(v)).getOrElse(false))
                 )
               ),
-              MayFail.success(isRefinedTo(args(0), Set("integer?", "real?")))
+              MayFail.success(isRefinedTo(args(0), Set("integer?", "real?", "number?")))
             )
           )
 

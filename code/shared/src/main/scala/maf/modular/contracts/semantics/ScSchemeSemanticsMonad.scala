@@ -7,6 +7,8 @@ trait ScModAnalysisSemanticsMonad extends ScAbstractSemanticsMonadAnalysis {
   implicit class PS(v: (Val, ScExp)) extends IsPostValue {
     override def pure: Val = v._1
     override def symbolic: PC = v._2
+    override def toString(): String =
+      s"($pure, $symbolic)"
   }
 
   object PS {
