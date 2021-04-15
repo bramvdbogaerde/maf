@@ -8,6 +8,9 @@ import maf.core.Identity
 import maf.language.contracts.ScLattice.AssumedValue
 import maf.language.contracts.ScNil
 import maf.modular.contracts.semantics.Counter
+import maf.concolicbridge.IdentityGenerator
+import maf.language.contracts.ScAssumed
+import maf.modular.contracts.semantics.ScModSemantics
 
 trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanticsCollaborativeTesting { outer =>
   override def intraAnalysis(component: Component): AnalysisWithAssumptionsIntra
@@ -43,6 +46,17 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
       def enabled(name: String): Boolean =
         availableAssumptions(name).isEnabled
 
+      def checkTag(value: PostValue, tag: String): ScEvalM[Boolean] = {
+        val assumedValues = lattice
+          .getAssumedValues(value)
+          .map(ass =>
+            read(ass.simpleContract)
+              .flatMap(value => value == lattice.schemeLattice.symbol(tag))
+          )
+
+        assumedValues.size >= 1 && sequence(assumedValues).flatMap(v => v.foldLeft(true)((a, b) => a && b))
+      }
+
       def hasTag(value: PostValue, tag: String): Set[ScEvalM[PostValue]] = {
         lattice
           .getAssumedValues(value.pure)
@@ -65,6 +79,14 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
      */
     case class TaggedAssumption(tag: String) extends Assumption {
       def name: String = tag
+      def applyTo(e: ScExp)(gen: IdentityGenerator): ScExp =
+        ScAssumed(
+          name = ScIdentifier(ScModSemantics.genSym, gen.nextIdentity) simpleContract = ScIdentifier("pure", gen.nextIdentity),
+          expression = e,
+          arguments = List(),
+          idn = gen.nextIdentity
+        )
+
       def run(
           name: String,
           exp: ScExp,

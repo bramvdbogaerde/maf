@@ -62,36 +62,43 @@ trait RecursiveAssumption extends ScBigStepSemanticsScheme with ScModSemanticsCo
         value: PostValue,
         conditional: ScEvalM[PostValue],
         blamedIdentity: Identity,
-        blamingIdentity: Identity
-      ): ScEvalM[PostValue] = withPc { pc =>
-      val t = feasible(primTrue, value)(pc)
-      val f = feasible(primFalse, value)(pc)
-      if (t.isRight && f.isRight && inlineCandidates.contains(blamedIdentity)) {
-        // if it the result of the flat contract is imprecise and if we are calling
-        // a recursive function we can try to make it more precise by inlining the function
-        val recursiveCall = inlineCandidates(blamedIdentity)
-        // keep track of which lambda was being selected, so that in the next run we can
-        // select a different lambda if necessary
-        val lambdaBeingCalled = recursiveCall.operator.lambda
-        val inlinedLambda = lambdaBeingCalled // TODO
-        withInstrumenter { instrumenter =>
-          val name = ScModSemantics.genSym
-          instrumenter.replaceAt(
-            blamedIdentity,
-            (generator, exp) => {
-              val nameIdn = () => ScIdentifier(name, generator.nextIdentity)
-              ScAssumed(
-                nameIdn(),
-                ScIdentifier("inline", generator.nextIdentity),
-                recursiveCall.syntactic,
-                List(inlinedLambda),
-                generator.nextIdentity
-              )
-            }
-          );
+        blamingIdentity: Identity,
+        syntacticOperator: Option[ScExp],
+        domainContract: Option[Int]
+      ): ScEvalM[PostValue] = {
+
+      val newConditional = withPc { pc =>
+        val t = feasible(primTrue, value)(pc)
+        val f = feasible(primFalse, value)(pc)
+        if (t.isRight && f.isRight && inlineCandidates.contains(blamedIdentity)) {
+          // if it the result of the flat contract is imprecise and if we are calling
+          // a recursive function we can try to make it more precise by inlining the function
+          val recursiveCall = inlineCandidates(blamedIdentity)
+          // keep track of which lambda was being selected, so that in the next run we can
+          // select a different lambda if necessary
+          val lambdaBeingCalled = recursiveCall.operator.lambda
+          val inlinedLambda = lambdaBeingCalled // TODO
+          withInstrumenter { instrumenter =>
+            val name = ScModSemantics.genSym
+            instrumenter.replaceAt(
+              blamedIdentity,
+              (generator, exp) => {
+                val nameIdn = () => ScIdentifier(name, generator.nextIdentity)
+                ScAssumed(
+                  nameIdn(),
+                  ScIdentifier("inline", generator.nextIdentity),
+                  recursiveCall.syntactic,
+                  List(inlinedLambda),
+                  generator.nextIdentity
+                )
+              }
+            );
+          }
         }
-      }
-    } >> conditional
+      } >> conditional
+
+      super.monFlatHook(value, newConditional, blamedIdentity, blamingIdentity, syntacticOperator, domainContract)
+    }
 
     /**
      *  Overriding this function has two purposes:
