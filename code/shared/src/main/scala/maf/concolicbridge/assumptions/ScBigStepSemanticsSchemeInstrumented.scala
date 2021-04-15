@@ -2,9 +2,6 @@ package maf.concolicbridge.assumptions
 
 import maf.concolicbridge.ScModSemanticsCollaborativeTesting
 
-// TODO:
-// 2. Implemented the semantics of inline tagged closures
-
 /** Convience trait that combines all the assumptions together */
 trait ScBigStepSemanticsSchemeInstrumented
     extends AnalysisWithAssumptions
@@ -13,6 +10,7 @@ trait ScBigStepSemanticsSchemeInstrumented
        with NondetIf
        with ValueAssumption
        with RecursiveAssumption
+       with HoldsAssumptionAnalysis
        with NonBlameAssumption {
 
   override def intraAnalysis(component: Component): IntraAnalysisInstrumented
@@ -22,5 +20,6 @@ trait ScBigStepSemanticsSchemeInstrumented
          with NondetIfIntra
          with ValueAssumptionIntra
          with RecursiveAssumptionIntra
+         with HoldsAssumptionAnalysisIntra
          with NonBlameAssumptionIntra
 }

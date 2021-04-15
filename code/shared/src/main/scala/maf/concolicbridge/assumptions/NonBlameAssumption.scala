@@ -10,7 +10,7 @@ import maf.language.contracts.{ScFunctionAp, ScIdentifier, ScValue}
 /**
  * An assumption that withholds a blame if proven to be safe by the concolic tester.
  *
- *  If applies consistently, it allows the concolic tester to disable contract checking enterirely, making it more efficient in general.
+ * If applied consistently, it allows the concolic tester to disable contract checking enterirely, making it more efficient in general.
  */
 trait NonBlameAssumption extends AnalysisWithAssumptions {
 
@@ -18,6 +18,7 @@ trait NonBlameAssumption extends AnalysisWithAssumptions {
 
   trait NonBlameAssumptionIntra extends AnalysisWithAssumptionsIntra {
     case object NonBlameAssumption extends TransformationAssumption("nonblame")
+    registerAssumption("nonblame", NonBlameAssumption)
 
     override def monFlatHook(
         value: PostValue,
@@ -32,7 +33,8 @@ trait NonBlameAssumption extends AnalysisWithAssumptions {
         val f = feasible(primFalse, value)(pc)
         t.isRight && f.isRight
       } >>= { checked =>
-        if (domainContract.isDefined && checked) {
+        if (domainContract.isDefined && checked && !tracker.contains("nonblame", blamedIdentity)) {
+          tracker.add("nonblame", blamedIdentity)
           // if it cannot be determined whether the contract is valid or not, then we try to assume it is
           effectful {
             withInstrumenter { instrumenter =>
