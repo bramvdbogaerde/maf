@@ -7,11 +7,14 @@ import maf.language.contracts.ScExp
 import maf.core.Identity
 import maf.language.contracts.ScLattice.AssumedValue
 import maf.language.contracts.ScNil
+import maf.modular.contracts.semantics.Counter
 
 trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanticsCollaborativeTesting { outer =>
   override def intraAnalysis(component: Component): AnalysisWithAssumptionsIntra
 
   trait AnalysisWithAssumptionsIntra extends ScIntraAnalysisInstrumented with IntraScBigStepSemantics {
+    implicit val symCounter: Counter = new Tracker.TrackerCounter(tracker)
+
     trait Assumption {
 
       /** The name of the assumption (e.g., pure, value, ...) */

@@ -12,15 +12,30 @@ import maf.modular.contracts.domain.ScDomain
 import maf.modular.contracts._
 import maf.core.BasicEnvironment
 
+trait Counter {
+  def next: Long
+  def reset: Unit
+}
+
+object GlobalCounter extends Counter {
+  private var ctr: Long = 0
+  def next: Long = {
+    ctr = ctr + 1
+    ctr
+  }
+
+  def reset: Unit = {
+    ctr = 0
+  }
+}
+
 object ScModSemantics {
-  var r = 0
-  def genSym: String = {
-    r += 1
+  def genSym(implicit counter: Counter = GlobalCounter): String = {
+    val r = counter.next
     s"x$r"
   }
 
-  def reset: Unit = r = 0
-
+  def reset(implicit counter: Counter = GlobalCounter): Unit = counter.reset
   def freshIdent: ScExp =
     ScIdentifier(genSym, Identity.none)
 }
