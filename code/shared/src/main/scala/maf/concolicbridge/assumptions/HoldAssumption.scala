@@ -11,7 +11,8 @@ trait HoldsAssumptionAnalysis extends AnalysisWithAssumptions {
   override def intraAnalysis(component: Component): HoldsAssumptionAnalysisIntra
 
   trait HoldsAssumptionAnalysisIntra extends AnalysisWithAssumptionsIntra {
-    case object HoldsAssumption extends TaggedAssumption("holds")
+    object HoldsAssumption extends TaggedAssumption("holds")
+    registerAssumption("holds", HoldsAssumption)
 
     // eventually a value that needs to be checked whether it satisfies
     // a contract reaches the monFlat method
@@ -23,16 +24,15 @@ trait HoldsAssumptionAnalysis extends AnalysisWithAssumptions {
         doBlame: Boolean,
         syntacticExpression: Option[ScExp]
       ): ScEvalM[PostValue] = {
-      if (
-        lattice.isDefinitivelyAssumedValue(expressionValue) &&
-        Assumption.checkTag(expressionValue, "holds")
-      ) {
-        // we assume that the contract holds, nothing to check
-        pure(expressionValue)
-      } else {
-        super.monFlat(contract, expressionValue, blamedIdentity, blamingIdentity, doBlame, syntacticExpression)
-      }
 
+      Assumption.checkTag(expressionValue, "holds") >>= { checked =>
+        if (lattice.isDefinitivelyAssumedValue(expressionValue.pure) && checked) {
+          // we assume that the contract holds, nothing to check
+          pure(expressionValue)
+        } else {
+          super.monFlat(contract, expressionValue, blamedIdentity, blamingIdentity, doBlame, syntacticExpression)
+        }
+      }
     }
   }
 }

@@ -161,12 +161,21 @@ trait ScSemanticsHooks extends ScSemantics {
    * a decision needs to be made whether a blame gets generated or not.
    *
    * The decision code is passed as an argument and can be ignored if necessary
+   *
+   * @param value the value that we got after applying the check (corresponds to either true or false at runtime)
+   * @param conditional the computation that normally blames if the contract cannot be verified
+   * @param blamedIdentity the location in the source code of the value that did not satisfy the contract
+   * @param blamingIdentity the location in the source code of the contract that is not satisfied
+   * @param syntacticOperator if available, the function whose domain the monFlat is checking (optional)
+   * @param domainContract the position in the argument list of the domain contract (optional)
    */
   def monFlatHook(
       value: PostValue,
       conditional: ScEvalM[PostValue],
       blamedIdentity: Identity,
-      blamingIdentity: Identity
+      blamingIdentity: Identity,
+      syntacticOperator: Option[ScExp],
+      domainContract: Option[Int]
     ): ScEvalM[PostValue] = conditional
 
   /**
@@ -528,8 +537,8 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
         }
 
         values <- sequence {
-          contract.domain.map(read).zip(operands.zip(syntacticOperands)).map { case (domain, (value, syn)) =>
-            domain.flatMap(d => applyMon(d, value, arr.contract.idn, syn.idn))
+          contract.domain.map(read).zip(operands.zip(syntacticOperands.zip(LazyList.from(1)))).map { case (domain, (value, (syn, n))) =>
+            domain.flatMap(d => applyMon(d, value, arr.contract.idn, syn.idn, Some(syntacticOperator), Some(n)))
           }
         }
 
@@ -571,6 +580,16 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
       evaluatedExpression: PostValue,
       contractIdn: Identity,
       exprIdn: Identity
+    ): ScEvalM[PostValue] =
+    applyMon(evaluatedContract, evaluatedExpression, contractIdn, exprIdn, None, None)
+
+  protected def applyMon(
+      evaluatedContract: PostValue,
+      evaluatedExpression: PostValue,
+      contractIdn: Identity,
+      exprIdn: Identity,
+      operator: Option[ScExp],
+      domainContract: Option[Int]
     ): ScEvalM[PostValue] = {
 
     // flat contract
@@ -595,11 +614,6 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
   def checkFlat(contract: PostValue, expressionvalue: PostValue): ScEvalM[PostValue] =
     monFlat(contract, expressionvalue, Identity.none, Identity.none, false)
 
-  /**
-   * Applies a flat contract to the given value, blames when the value violates
-   * the contract, except when doBlame is false, it that case it simply generates
-   * no successor states
-   */
   def monFlat(
       contract: PostValue,
       expressionValue: PostValue,
@@ -607,6 +621,32 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
       blamingIdentity: Identity = Identity.none,
       doBlame: Boolean = true,
       syntacticExpression: Option[ScExp] = None
+    ): ScEvalM[PostValue] =
+    monFlat(
+      contract,
+      expressionValue,
+      blamedIdentity,
+      blamingIdentity,
+      doBlame,
+      syntacticExpression,
+      None,
+      None
+    )
+
+  /**
+   * Applies a flat contract to the given value, blames when the value violates
+   * the contract, except when doBlame is false, it that case it simply generates
+   * no successor states
+   */
+  protected def monFlat(
+      contract: PostValue,
+      expressionValue: PostValue,
+      blamedIdentity: Identity,
+      blamingIdentity: Identity,
+      doBlame: Boolean,
+      syntacticExpression: Option[ScExp],
+      syntacticOperator: Option[ScExp],
+      domainContract: Option[Int]
     ): ScEvalM[PostValue] =
     applyFn(contract,
             List(expressionValue),
@@ -622,7 +662,9 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
             if (doBlame) blame(blamedIdentity, blamingIdentity) else void
           ),
           blamedIdentity,
-          blamingIdentity
+          blamingIdentity,
+          syntacticOperator,
+          domainContract
         )
         afterHook
       }

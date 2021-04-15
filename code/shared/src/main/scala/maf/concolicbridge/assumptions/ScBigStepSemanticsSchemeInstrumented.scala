@@ -12,7 +12,8 @@ trait ScBigStepSemanticsSchemeInstrumented
        with PurityAssumption
        with NondetIf
        with ValueAssumption
-       with RecursiveAssumption {
+       with RecursiveAssumption
+       with NonBlameAssumption {
 
   override def intraAnalysis(component: Component): IntraAnalysisInstrumented
   trait IntraAnalysisInstrumented
@@ -21,4 +22,5 @@ trait ScBigStepSemanticsSchemeInstrumented
          with NondetIfIntra
          with ValueAssumptionIntra
          with RecursiveAssumptionIntra
+         with NonBlameAssumptionIntra
 }

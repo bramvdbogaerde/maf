@@ -47,14 +47,17 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
         availableAssumptions(name).isEnabled
 
       def checkTag(value: PostValue, tag: String): ScEvalM[Boolean] = {
-        val assumedValues = lattice
-          .getAssumedValues(value)
+        val assumedValues: List[ScEvalM[Boolean]] = lattice
+          .getAssumedValues(value.pure)
           .map(ass =>
             read(ass.simpleContract)
-              .flatMap(value => value == lattice.schemeLattice.symbol(tag))
+              .map(value => value == lattice.schemeLattice.symbol(tag))
           )
+          .toList
 
-        assumedValues.size >= 1 && sequence(assumedValues).flatMap(v => v.foldLeft(true)((a, b) => a && b))
+        sequence(assumedValues)
+          .map(v => v.foldLeft(true)((a, b) => a && b))
+          .map(v => v && assumedValues.size >= 1)
       }
 
       def hasTag(value: PostValue, tag: String): Set[ScEvalM[PostValue]] = {
@@ -81,7 +84,8 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
       def name: String = tag
       def applyTo(e: ScExp)(gen: IdentityGenerator): ScExp =
         ScAssumed(
-          name = ScIdentifier(ScModSemantics.genSym, gen.nextIdentity) simpleContract = ScIdentifier("pure", gen.nextIdentity),
+          name = ScIdentifier(ScModSemantics.genSym, gen.nextIdentity),
+          simpleContract = ScIdentifier(tag, gen.nextIdentity),
           expression = e,
           arguments = List(),
           idn = gen.nextIdentity

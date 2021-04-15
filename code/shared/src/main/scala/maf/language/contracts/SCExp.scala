@@ -232,6 +232,11 @@ case class ScValue(value: Value, idn: Identity) extends ScLiterals {
   override def toString: String = s"$value"
 }
 
+object ScValue {
+  def num(n: BigInt, idn: Identity): ScExp =
+    ScValue(Value.Integer(n), idn)
+}
+
 case class ScFunctionAp(
     operator: ScExp,
     operands: List[ScExp],
