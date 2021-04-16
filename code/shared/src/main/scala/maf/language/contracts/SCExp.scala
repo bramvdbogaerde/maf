@@ -34,6 +34,10 @@ case object CDR extends Label
 case object VARARG_IDENTIFIER extends Label
 case object ASSUMED extends Label
 case object GIVEN extends Label
+case object TEST extends Label
+case object TEST_VERIFIED extends Label
+case object TEST_VIOLATED extends Label
+case object IF_GUARDED extends Label
 
 /** A language for defining software contracts */
 trait ScExp extends SchemeExp {
@@ -472,6 +476,55 @@ case class ScGiven(
 
   override def subexpressions: List[Expression] = List(expression)
 
+}
+
+/** (test guardName guard) */
+case class ScTest(
+    guardName: ScIdentifier,
+    guard: ScExp,
+    idn: Identity)
+    extends ScExp {
+
+  override def fv: Set[String] = guard.fv
+
+  override def label: Label = TEST
+
+  override def subexpressions: List[Expression] = List(guard)
+}
+
+/** (test/verified guardName guard) */
+case class ScTestVerified(
+    guardName: ScIdentifier,
+    guard: ScExp,
+    idn: Identity)
+    extends ScExp {
+
+  override def fv: Set[String] = guard.fv
+  override def label: Label = TEST_VERIFIED
+  override def subexpressions: List[Expression] = List(guard)
+}
+
+/** (test/violated guardName guard) */
+case class ScTestViolated(
+    guardName: ScIdentifier,
+    guard: ScExp,
+    idn: Identity)
+    extends ScExp {
+
+  override def fv: Set[String] = guard.fv
+  override def label: Label = TEST_VIOLATED
+  override def subexpressions: List[Expression] = List(guard)
+}
+
+case class ScIfGuard(
+    guardName: ScIdentifier,
+    consequent: ScExp,
+    alternatives: List[ScExp],
+    idn: Identity)
+    extends ScExp {
+  override def fv: Set[String] = consequent.fv ++ alternatives.flatMap(_.fv)
+  override def label: Label = IF_GUARDED
+  override def subexpressions: List[Expression] = List(consequent) ++ alternatives
 }
 
 /**

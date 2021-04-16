@@ -214,6 +214,26 @@ object SCExpCompiler {
       val compiledExpression = compile(expression)
       ScMon(compiledContract, compiledExpression, prog.idn)
 
+    case Ident("test") :: IdentWithIdentity(name, nameIdn) :: guard :: ListNil(_) =>
+      val compiledGuard = compile(guard)
+      ScTest(ScIdentifier(name, nameIdn), compiledGuard, prog.idn)
+
+    case Ident("test/verified") :: IdentWithIdentity(name, nameIdn) :: guard :: ListNil(_) =>
+      val compiledGuard = compile(guard)
+      ScTestVerified(ScIdentifier(name, nameIdn), compiledGuard, prog.idn)
+
+    case Ident("test/violated") :: IdentWithIdentity(name, nameIdn) :: guard :: ListNil(_) =>
+      val compiledGuard = compile(guard)
+      ScTestViolated(ScIdentifier(name, nameIdn), compiledGuard, prog.idn)
+
+    case Ident("if/guard") :: IdentWithIdentity(guardName, guardIdn) :: consequent :: alternatives =>
+      val compiledConsequent = compile(consequent)
+      val compiledAlternatives = compile_sequence(alternatives)
+      ScIfGuard(ScIdentifier(guardName, guardIdn), compiledConsequent, compiledAlternatives, prog.idn)
+
+    case Ident(v @ ("test" | "test/verified" | "test/violated")) :: _ =>
+      throw new Exception(s"Invalid syntax for $v")
+
     case Ident("if") :: condition :: consequent :: alternative :: ListNil(_) =>
       val compiledCondition = compile(condition)
       val compiledConsequent = compile(consequent)
