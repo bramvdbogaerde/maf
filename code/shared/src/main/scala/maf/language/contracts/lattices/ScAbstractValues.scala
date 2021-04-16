@@ -49,6 +49,11 @@ trait ScAbstractValues[A <: Address] {
     def ord = 8
   }
 
+  /** We treat the assumption guard as a singleton, as the value should never be joined with another assumption guard, if that happens the system is in an incosistent state and should be reported */
+  case class AssumptionGuards(guard: AssumptionGuard) extends ValueExt {
+    def ord = 9
+  }
+
   object Values {
     implicit val partialLattice: PartialLattice[ValueExt] = new PartialLattice[ValueExt] {
       override def join(x: ValueExt, y: => ValueExt): ValueExt = (x, y) match {
@@ -60,7 +65,9 @@ trait ScAbstractValues[A <: Address] {
         case (Flats(a), Flats(b))                 => Flats(a ++ b)
         case (Clos(a), Clos(b))                   => Clos(a ++ b)
         case (AssumedValues(a), AssumedValues(b)) => AssumedValues(a ++ b)
-        case _                                    => throw new Exception(s"Illegal join $x $y")
+        case (AssumptionGuards(a), AssumptionGuards(b)) =>
+          throw new Exception("Cannot join assumption guards together")
+        case _ => throw new Exception(s"Illegal join $x $y")
       }
 
       override def subsumes(x: ValueExt, y: => ValueExt): Boolean =

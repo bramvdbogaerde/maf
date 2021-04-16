@@ -63,6 +63,25 @@ object ScLattice {
       e: Addr,
       topLevel: Boolean = false)
 
+  /** Guards for assumptions, they can be either violated, verified and or not verified yet */
+  sealed trait AssumptionGuardStatus
+
+  /** The assumption is verified (make-verified-guard) */
+  case object Verified extends AssumptionGuardStatus
+
+  /** The assumption is not verified yet (make-guard) */
+  case object Unverified extends AssumptionGuardStatus
+
+  /** The assumption is violated (make-violated-assumption) */
+  case object Violated extends AssumptionGuardStatus
+
+  /** A value that wraps the state of the assumption guard */
+  case class AssumptionGuard(
+      status: AssumptionGuardStatus)
+
+  /** A generic wrapper for a value and a tag */
+  case class AssumedValue[Addr <: Address](simpleContract: Addr, value: Addr)
+
   /**
    * A value that represents a flat contract, such that we can distribute blames correctly when a value
    * of this type is applied.
@@ -88,9 +107,6 @@ object ScLattice {
 
   /** A scheme symbol */
   case class Symbol(value: String)
-
-  /** A value that was produced by an assumed expression */
-  case class AssumedValue[Addr <: Address](simpleContract: Addr, value: Addr)
 
   /** Nil */
   case object Nil
@@ -308,7 +324,13 @@ trait ScSchemeLattice[L, Addr <: Address] extends Lattice[L] {
   /** Inject an assumed value in the abstract domain */
   def assumedValue(assumed: AssumedValue[Addr]): L
 
+  /** Inject an assumption guard in the abstract domain */
+  def assumptionGuard(guard: AssumptionGuard): L
+
   /*==================================================================================================================*/
+
+  /** Extract the assumption guard from the abstract domain */
+  def getAssumptionGuard(value: L): AssumptionGuard
 
   /** Extract a set of arrow (monitors on functions) from the abstract value */
   def getArr(value: L): Set[Arr[Addr]]

@@ -16,6 +16,7 @@ import maf.modular.contracts.semantics.{ScModSemantics, ScSharedSemantics}
 import maf.util.benchmarks.Timeout
 import maf.language.contracts.ScLattice.AssumedValue
 import maf.language.contracts.lattices.ScConcreteValues.ConsValue
+import maf.language.contracts.ScLattice.AssumptionGuard
 
 case class PrimitiveNotFound(name: String) extends Exception {
   override def getMessage(): String =
@@ -123,6 +124,15 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
 
     override def getAssumedValues(v: Val): Set[AssumedValue[Addr]] =
       Set() // not supposed to happen
+
+    override def getAssumptionGuard(v: Val): AssumptionGuard = v match {
+      case AssumptionGuardValue(ass) => ass
+      case _ =>
+        throw new Exception("Value is not an assumption guard")
+    }
+
+    override def assumptionGuard(v: AssumptionGuard): Val =
+      AssumptionGuardValue(v)
   }
 
   private var firstFree: Int = 0

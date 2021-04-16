@@ -89,6 +89,8 @@ object ScConcreteValues {
 
   /** A closure */
   case class ClosureValue(clo: Clo[ScAddr]) extends ScValue
+
+  case class AssumptionGuardValue(ass: AssumptionGuard) extends ScValue
 }
 
 trait ScConcreteLattice extends ScSchemeLattice[ConcreteValues.Value, ScConcreteValues.ScAddr] {

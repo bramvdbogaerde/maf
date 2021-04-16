@@ -147,6 +147,9 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
     def assumedValue(value: AssumedValue[A]): V =
       Product2.injectLeft(ProductLattice(AssumedValues(Set(value))))
 
+    def assumptionGuard(value: AssumptionGuard): V =
+      Product2.injectLeft(ProductLattice(AssumptionGuards(value)))
+
     /*==================================================================================================================*/
 
     /** Extract a set of arrow (monitors on functions) from the abstract value */
@@ -231,6 +234,12 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
         }
         .flatMap(_.values)
         .toSet
+
+    def getAssumptionGuard(value: V): AssumptionGuard =
+      value.left.vs.flatMap {
+        case AssumptionGuards(g) => Some(g)
+        case _                   => None
+      }(0)
 
     /*==================================================================================================================*/
 
