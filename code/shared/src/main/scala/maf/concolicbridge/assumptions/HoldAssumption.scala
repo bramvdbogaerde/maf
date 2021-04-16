@@ -16,6 +16,18 @@ trait HoldsAssumptionAnalysis extends AnalysisWithAssumptions {
     object HoldsAssumption extends TaggedAssumption("holds")
     registerAssumption("holds", HoldsAssumption)
 
+    override def callPrimitive(p: PrimitiveOperator, args: List[Argument]): ScEvalM[PS] =
+      sequence(args.flatMap(arg => {
+        val ps = arg.v
+        if (lattice.isDefinitivelyAssumedValue(ps.pure)) {
+          lattice.getAssumedValues(ps.pure).map(assumed => read(assumed.value).map(v => Argument(v, arg.e)))
+        } else if (lattice.getAssumedValues(ps.pure).size == 0) {
+          List(pure(arg))
+        } else {
+          throw new Exception("Either the value is a singleton assumption, or just another type of value, nothing in between")
+        }
+      })).flatMap(args => super.callPrimitive(p, args))
+
     override protected def call(
         clo: ScLattice.Clo[Address],
         operands: List[PS],
@@ -24,7 +36,6 @@ trait HoldsAssumptionAnalysis extends AnalysisWithAssumptions {
       ): ScEvalM[PS] = {
       // filter out all the tagged assumption values (i.e. resolve them to their actual values)
       sequence(operands.flatMap(ps => {
-        println(ps)
         if (lattice.isDefinitivelyAssumedValue(ps.pure)) {
           lattice.getAssumedValues(ps.pure).map(assumed => read(assumed.value))
         } else if (lattice.getAssumedValues(ps.pure).size == 0) {
