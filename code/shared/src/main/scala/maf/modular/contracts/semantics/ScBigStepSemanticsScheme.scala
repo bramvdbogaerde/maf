@@ -208,12 +208,21 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
   private lazy val primCdr = primMap("cdr")
 
   private var totalRuns = 0
+
   def eval(expr: ScExp): ScEvalM[PostValue] = (expr match {
-    case ScBegin(expressions, _)                              => evalSequence(expressions)
-    case ScIf(condition, consequent, alternative, idn)        => evalIf(condition, consequent, alternative, idn)
-    case ScLetRec(idents, bindings, body, _)                  => evalLetRec(idents, bindings, body)
-    case ScRaise(_, _)                                        => ???
-    case ScSet(variable, value, _)                            => evalSet(variable, value)
+    case ScBegin(expressions, _)                       => evalSequence(expressions)
+    case ScIf(condition, consequent, alternative, idn) => evalIf(condition, consequent, alternative, idn)
+    case ScLetRec(idents, bindings, body, _)           => evalLetRec(idents, bindings, body)
+    case ScRaise(_, _)                                 => ???
+    case ScSet(variable, value, _)                     => evalSet(variable, value)
+    case ScFunctionAp(ScIdentifier("make-guard", _), List(), idn, _) =>
+      makeGuard(idn, GuardUnverified)
+
+    case ScFunctionAp(ScIdentifier("make-verified-guard", _), List(), idn, _) =>
+      makeGuard(idn, GuardVerified)
+    case ScFunctionAp(ScIdentifier("make-violated-guard", _), List(), idn, _) =>
+      makeGuard(idn, GuardViolated)
+
     case ScFunctionAp(ScIdentifier("and", _), operands, _, _) => evalAnd(operands)
     case ScFunctionAp(operator, operands, idn, _)             => evalFunctionAp(operator, operands, idn)
     case v: ScValue                                           => evalValue(v)
@@ -255,6 +264,9 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
 
   def readPure(addr: Addr, storeCache: StoreCache): Val =
     storeCache.lookup(addr).map(_.pure).getOrElse(lattice.bottom)
+
+  protected def makeGuard(idn: Identity, state: AssumptionGuardStatus): ScEvalM[PostValue] =
+    result(lattice.assumptionGuard(AssumptionGuard(state, idn)))
 
   def evalAnd(operands: List[ScExp]): ScEvalM[PostValue] =
     operands match {

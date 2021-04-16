@@ -67,17 +67,23 @@ object ScLattice {
   sealed trait AssumptionGuardStatus
 
   /** The assumption is verified (make-verified-guard) */
-  case object Verified extends AssumptionGuardStatus
+  case object GuardVerified extends AssumptionGuardStatus
 
   /** The assumption is not verified yet (make-guard) */
-  case object Unverified extends AssumptionGuardStatus
+  case object GuardUnverified extends AssumptionGuardStatus
 
   /** The assumption is violated (make-violated-assumption) */
-  case object Violated extends AssumptionGuardStatus
+  case object GuardViolated extends AssumptionGuardStatus
 
-  /** A value that wraps the state of the assumption guard */
+  /**
+   * A value that wraps the state of the assumption guard
+   *
+   *  @param status the status of the guard
+   *  @param idn the identity (source code location) of where the guard was created
+   */
   case class AssumptionGuard(
-      status: AssumptionGuardStatus)
+      status: AssumptionGuardStatus,
+      idn: Identity)
 
   /** A generic wrapper for a value and a tag */
   case class AssumedValue[Addr <: Address](simpleContract: Addr, value: Addr)
