@@ -8,6 +8,10 @@ import maf.concolic.contracts.ConcolicTesting
 import maf.concolic.ConcolicTestingJVM
 import maf.language.contracts.SCExpCompiler
 import maf.modular.contracts.semantics.ScModSemanticsScheme
+import maf.language.contracts.ScLattice.AssumptionGuard
+import maf.language.contracts.ScLattice.GuardUnverified
+import maf.language.contracts.ScLattice.GuardVerified
+import maf.language.contracts.ScLattice.GuardViolated
 
 class CollaborativeAnalysisTest extends ScTestsJVMGlobalStore {
   class SimpleCollaborativeAnalysis(exp: ScExp) extends ConcolicBridge(exp) {
@@ -35,6 +39,21 @@ class CollaborativeAnalysisTest extends ScTestsJVMGlobalStore {
     f(analysis)
     analysis.analyze()
     analysis.currentAnalysis.get
+  }
+
+  "(make-guard)" should "evaluate to an unverified guard" in {
+    val result = analyze("(make-guard)")
+    result.lattice.getAssumptionGuard(result.finalResult).status shouldEqual GuardUnverified
+  }
+
+  "(make-verified-guard)" should "evaluate to a verified guard" in {
+    val result = analyze("(make-verified-guard)")
+    result.lattice.getAssumptionGuard(result.finalResult).status shouldEqual GuardVerified
+  }
+
+  "(make-violated-guard)" should "evaluate to a violated guard" in {
+    val result = analyze("(make-violated-guard)")
+    result.lattice.getAssumptionGuard(result.finalResult).status shouldEqual GuardViolated
   }
 
   "(+ 1 1)" should "equal 2" in {
