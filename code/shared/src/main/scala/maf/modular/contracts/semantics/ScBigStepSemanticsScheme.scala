@@ -971,7 +971,7 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
     protected def impactedVariables(): ScEvalM[List[Addr]] = {
       val fv = impactVariablesNames
       // resolve the free variables to addresses
-      sequence(fv.map(name => withEnv { env => env.lookup(name).map((v: Addr) => pure(v)).getOrElse(void) }))
+      sequenceFlatten(fv.map(name => withEnv { env => pure(env.lookup(name)) }))
     }
 
     /**

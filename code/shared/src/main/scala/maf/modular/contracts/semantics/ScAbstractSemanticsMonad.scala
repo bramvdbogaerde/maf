@@ -128,6 +128,19 @@ trait ScAbstractSemanticsMonadAnalysis {
     case _      => sequence(xs)
   }
 
+  def sequenceFlatten[X](xs: List[ScEvalM[Option[X]]]): ScEvalM[List[X]] = xs match {
+    case List() => pure(List())
+    case _ =>
+      xs.head.flatMap(v =>
+        sequenceFlatten(xs.tail).flatMap(results =>
+          v match {
+            case Some(result) => pure(result :: results)
+            case _            => pure(results)
+          }
+        )
+      )
+  }
+
   /**
    * Runs the given sequence of actions in the given order,
    * and collects their results in a list

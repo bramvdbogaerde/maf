@@ -7,6 +7,7 @@ import maf.modular.contracts.semantics.ScModSemantics
 import maf.language.contracts.ScIdentifier
 import maf.language.contracts.ScBegin
 import maf.language.contracts.ScTest
+import maf.language.contracts.AssumptionBuilder
 
 /**
  * This injects a "value" assumption into the code,
@@ -31,20 +32,12 @@ trait NondetIf extends AnalysisWithAssumptions {
         instrumenter.replaceAt(
           idn,
           (generator, exp) => {
-            val nameIdent = () => ScIdentifier(name, generator.nextIdentity)
-            val assumption = ScAssumed(
-              ScIdentifier("value", generator.nextIdentity),
-              List(consequent, alternative),
-              generator.nextIdentity
+            val builder = new AssumptionBuilder(generator)
+            builder.addPreTest(condition)
+            builder.body(
+              builder.guarded(ScAssumed(ScIdentifier("value", generator.nextIdentity), List(consequent), generator.nextIdentity), List(), exp)
             )
-
-            val assertion = ScTest(
-              nameIdent(),
-              condition,
-              generator.nextIdentity
-            )
-
-            ScBegin(List(assertion, assumption), generator.nextIdentity)
+            builder.build
           }
         )
       }
