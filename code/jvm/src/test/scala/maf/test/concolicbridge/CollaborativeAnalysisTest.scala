@@ -66,22 +66,22 @@ class CollaborativeAnalysisTest extends ScTestsJVMGlobalStore {
     result.finalResult shouldEqual result.lattice.schemeLattice.number(2)
   }
 
-  //"(define (f x) (if (< x 4) #t #f)) (f 3) (f 2)" should "be true" in {
-  //  val result = withModifiedAnalysis("(define (f x) (if (< x 4) #t #f)) (f 3) (f 2)") { analysis => analysis.disable("pure") }
-  //  result.finalResult shouldEqual result.lattice.schemeLattice.bool(true)
-  //}
+  "(define (f x) (if (< x 4) #t #f)) (f 3) (f 2)" should "be true" in {
+    val result = withModifiedAnalysis("(define (f x) (if (< x 4) #t #f)) (f 3) (f 2)") { analysis => analysis.disable("pure") }
+    result.finalResult shouldEqual result.lattice.schemeLattice.bool(true)
+  }
 
-  //"(define (f x) (if (< x 4) #t #f)) (f 3) (f 2)" should "be bool top without assumptions" in {
-  //  val result = withModifiedAnalysis("(define (f x) (if (< x 4) #t #f)) (f 3) (f 2)") { analysis =>
-  //    analysis.disable("nondetif"); analysis.disable("pure")
-  //  }
-  //  result.finalResult shouldEqual result.lattice.schemeLattice.boolTop
-  //}
+  "(define (f x) (if (< x 4) #t #f)) (f 3) (f 2)" should "be bool top without assumptions" in {
+    val result = withModifiedAnalysis("(define (f x) (if (< x 4) #t #f)) (f 3) (f 2)") { analysis =>
+      analysis.disable("nondetif"); analysis.disable("pure")
+    }
+    result.finalResult shouldEqual result.lattice.schemeLattice.boolTop
+  }
 
-  //"(define (f x) (if (< x 4) #t #f)) (f 3) (f 5)" should "be bool top when the assumption is violated" in {
-  //  val result = withModifiedAnalysis("(define (f x) (if (< x 4) #t #f)) (f 3) (f 5)") { analysis => analysis.disable("pure") }
-  //  result.finalResult shouldEqual result.lattice.schemeLattice.boolTop
-  //}
+  "(define (f x) (if (< x 4) #t #f)) (f 3) (f 5)" should "be bool top when the assumption is violated" in {
+    val result = withModifiedAnalysis("(define (f x) (if (< x 4) #t #f)) (f 3) (f 5)") { analysis => analysis.disable("pure") }
+    result.finalResult shouldEqual result.lattice.schemeLattice.boolTop
+  }
 
   //"nonblame assumption" should "fully verify a contract program without blaming" in {
   //  val program = """(define (</c x) (lambda (y) (< y x)))

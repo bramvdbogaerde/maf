@@ -6,17 +6,19 @@ import maf.language.contracts.ScBegin
 import maf.modular.contracts.semantics.ScModSemantics
 import maf.language.contracts.{ScFunctionAp, ScIdentifier, ScValue}
 import maf.language.contracts.ScTest
+import maf.language.contracts.AssumptionBuilder
+import maf.language.contracts.ScAssumed
 
 /**
  * An assumption that withholds a blame if proven to be safe by the concolic tester.
  *
  * If applied consistently, it allows the concolic tester to disable contract checking enterirely, making it more efficient in general.
  */
-trait NonBlameAssumption extends AnalysisWithAssumptions {
+trait NonBlameAssumption extends AnalysisWithAssumptions with HoldsAssumptionAnalysis {
 
   override def intraAnalysis(component: Component): NonBlameAssumptionIntra
 
-  trait NonBlameAssumptionIntra extends AnalysisWithAssumptionsIntra {
+  trait NonBlameAssumptionIntra extends AnalysisWithAssumptionsIntra with HoldsAssumptionAnalysisIntra {
     case object NonBlameAssumption extends TransformationAssumption("nonblame")
     registerAssumption("nonblame", NonBlameAssumption)
 
@@ -41,28 +43,14 @@ trait NonBlameAssumption extends AnalysisWithAssumptions {
               instrumenter.replaceAt(
                 blamedIdentity,
                 (gen, exp) => {
-                  val assName = ScModSemantics.genSym
-                  val assIdentifier = () => ScIdentifier(assName, gen.nextIdentity)
-
-                  ScBegin(
-                    List(
-                      ScTest(
-                        assIdentifier(),
-                        ScFunctionAp(
-                          ScFunctionAp.primitive(
-                            "domain-contract",
-                            List(syntacticOperator.get, ScValue.num(domainContract.get, gen.nextIdentity)),
-                            gen.nextIdentity
-                          ),
-                          List(exp),
-                          gen.nextIdentity
-                        ),
-                        gen.nextIdentity
-                      ),
-                      exp
-                    ),
+                  val builder = new AssumptionBuilder(gen)
+                  val contract = ScFunctionAp.primitive(
+                    "domain-contract",
+                    List(syntacticOperator.get, ScValue.num(domainContract.get, gen.nextIdentity)),
                     gen.nextIdentity
                   )
+                  builder.addPreTest(ScFunctionAp(contract, List(exp), gen.nextIdentity))
+                  builder.guarded(HoldsAssumption.applyTo(exp)(gen), List(), exp)
                 }
               )
             }
