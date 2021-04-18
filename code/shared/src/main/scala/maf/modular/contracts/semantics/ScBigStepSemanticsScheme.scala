@@ -129,6 +129,12 @@ trait ScSemantics extends ScAbstractSemanticsMonadAnalysis {
     ): ScEvalM[PostValue]
 
   /**
+   * Evaluates an expression of the form
+   * (test guard-name assertion)
+   */
+  def evalTestGuard(test: AbstractScTest): ScEvalM[PostValue]
+
+  /**
    * Evaluate a `given` expression. This method is abstract because the implementation
    * differs from the analyser and the concrete execution
    */
@@ -215,13 +221,15 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
     case ScLetRec(idents, bindings, body, _)           => evalLetRec(idents, bindings, body)
     case ScRaise(_, _)                                 => ???
     case ScSet(variable, value, _)                     => evalSet(variable, value)
+
     case ScFunctionAp(ScIdentifier("make-guard", _), List(), idn, _) =>
       makeGuard(idn, GuardUnverified)
-
     case ScFunctionAp(ScIdentifier("make-verified-guard", _), List(), idn, _) =>
       makeGuard(idn, GuardVerified)
     case ScFunctionAp(ScIdentifier("make-violated-guard", _), List(), idn, _) =>
       makeGuard(idn, GuardViolated)
+    case test: AbstractScTest =>
+      evalTestGuard(test)
 
     case ScFunctionAp(ScIdentifier("and", _), operands, _, _) => evalAnd(operands)
     case ScFunctionAp(operator, operands, idn, _)             => evalFunctionAp(operator, operands, idn)
@@ -871,12 +879,19 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
 
     /*==================================================================================================================*/
 
+    /**
+     * The assertions associated with a given guard must only be evaluated during the concolic test run, which means
+     *  that analysis time this is a no-op
+     */
+    override def evalTestGuard(test: AbstractScTest): ScEvalM[PostValue] =
+      result(lattice.schemeLattice.nil)
+
     /** Evaluating `given` does not have any effect at analysis time, because the analyser assumes it being true */
     override def evalGiven(
         name: ScIdentifier,
         expr: ScExp,
         idn: Identity
-      ): ScEvalM[PostValue] = result(lattice.schemeLattice.nil)
+      ): ScEvalM[PostValue] = ???
 
     /*==================================================================================================================*/
 

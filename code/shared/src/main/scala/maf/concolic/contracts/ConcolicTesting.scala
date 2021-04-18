@@ -17,6 +17,7 @@ import maf.util.benchmarks.Timeout
 import maf.language.contracts.ScLattice.AssumedValue
 import maf.language.contracts.lattices.ScConcreteValues.ConsValue
 import maf.language.contracts.ScLattice.AssumptionGuard
+import maf.concolicbridge.Instrumenter
 
 case class PrimitiveNotFound(name: String) extends Exception {
   override def getMessage(): String =
@@ -297,12 +298,19 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
   protected def throwAssumptionFailure(name: ScIdentifier, idn: Identity): ScEvalM[Unit] =
     error(ConcTree.assumptionViolated(name.name))
 
+  override def evalTestGuard(test: AbstractScTest): ScEvalM[PostValue] = test match {
+    case _: ScTest =>
+      eval(test.guard).flatMap(value => cond(value, result(lattice.schemeLattice.nil), throwAssumptionFailure(test.guardName, test.idn) >> void))
+
+    // all the other cases are either violated in a previous run, or verified, in both cases we do not need to check them any longer
+    case _ => result(lattice.schemeLattice.nil)
+  }
+
   override def evalGiven(
       name: ScIdentifier,
       expr: ScExp,
       idn: Identity
-    ): ScEvalM[PostValue] =
-    eval(expr).flatMap(value => cond(value, result(lattice.schemeLattice.nil), throwAssumptionFailure(name, idn) >> void))
+    ): ScEvalM[PostValue] = ???
 
   /** In the concrete execution, this does not have any effects */
   override def evalAssumed(
@@ -320,6 +328,76 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
    */
   override def solve(pc: ScExp): Boolean = true
 
+}
+
+class GuardTracker {
+
+  /** Keeps track of the guards we have tested and created */
+  private var guards: Set[String] = Set()
+
+  /** Keeps track of the source locations where a guard with the given name is created */
+  private var guardIdentities: Map[String, Identity] = Map()
+
+  /** Keeps track of all the assertions associated with a guard */
+  private var guardTests: Map[String, List[Identity]] = Map()
+
+  /**
+   * Registers that a guard is created with the given name on the given
+   * source location. This does not take scope of the guards into account,
+   * we thusly assume that each guard name is unique.
+   */
+  def guard(name: String, idn: Identity): Unit = {
+    guards += name
+    val identities = guardIdentities.get(name)
+    val value = identities match {
+      case Some(v) if v == idn => idn
+      case Some(_)             => throw new Exception("assumption failed that all guard names are unique")
+      case None                => idn
+    }
+
+    guardIdentities += (name -> value)
+  }
+
+  /** Registers a test for the given guard name */
+  def test(name: String, idn: Identity): Unit = {
+    guards += name
+    val currentTests = guardTests.get(name).getOrElse(List[Identity]())
+    guardTests = guardTests + (name -> (idn :: currentTests))
+  }
+
+  /**
+   * Registers that the assumption with the given name is violated,
+   * removes the guard from the tracked guards such that
+   * we known that it is being violated.
+   */
+  def violated(name: String): Unit = {
+    guards -= name
+    guardIdentities = guardIdentities.removed(name)
+    guardTests = guardTests.removed(name)
+  }
+
+  /**
+   * Given an instrumenter, returns a new instrumenter that
+   * will have all the tests and guards transformed to verified
+   * tests and guards.
+   */
+  def replaceVerified(instrumenter: Instrumenter): Instrumenter = {
+    val updatedInstrumenter = guardIdentities.values.foldLeft(instrumenter)((instrumenter, idn) =>
+      instrumenter.replaceAt(idn, (gen, exp) => ScFunctionAp.primitive("make-verified-guard", List(), exp.idn))
+    )
+
+    guardTests.values.flatten.foldLeft(updatedInstrumenter)((instrumenter, idn) =>
+      instrumenter.replaceAt(
+        idn,
+        (gen, exp) =>
+          exp match {
+            case t: AbstractScTest => ScTestVerified(t.guardName, t.guard, t.idn)
+            case _ =>
+              throw new Exception(s"should replace a test expression, but found $exp instead")
+          }
+      )
+    )
+  }
 }
 
 /**
@@ -341,18 +419,49 @@ abstract class ConcolicTesting(
   private var _tree: ConcTree = ConcTree.empty
   private var maxdepth = defaultMaxDepth
 
-  /** A map from assumption names to location where they were violated */
-  private var assumptionViolations: Map[String, Identity] = Map()
+  private val tracker: GuardTracker = new GuardTracker()
+  private var instrumenter: Instrumenter = Instrumenter(Map())
   private val root: maf.concolic.contracts.ConcTree = maf.concolic.contracts.ConcTree.empty
 
   def tree: ConcTree = _tree
   def results: List[Value] = _results.filterNot(_ == Value.Nil)
-  def violated: Set[String] = assumptionViolations.keySet
+  def violated: Set[String] = ???
 
-  override protected def throwAssumptionFailure(name: ScIdentifier, idn: Identity): ScEvalM[Unit] = {
-    effectful { assumptionViolations += (name.name -> idn) } >>
-      super.throwAssumptionFailure(name, idn)
-  }
+  override protected def throwAssumptionFailure(name: ScIdentifier, idn: Identity): ScEvalM[Unit] = for {
+    addr <- lookup(name.name)
+    value <- read(addr)
+    guard <- pure(lattice.getAssumptionGuard(value.pure))
+    _ <- effectful {
+      instrumenter = instrumenter.replaceAt(guard.idn, (gen, exp) => ScFunctionAp.primitive("make-violated-guard", List(), exp.idn))
+      instrumenter = instrumenter.replaceAt(
+        idn,
+        (gen, exp) =>
+          exp match {
+            case t: AbstractScTest =>
+              ScTestViolated(name, t.guard, t.idn)
+            case _ =>
+              throw new Exception(s"should replace a test expression, but found $exp instead")
+          }
+      )
+
+      tracker.violated(name.name)
+    }
+    _ <- super.throwAssumptionFailure(name, idn)
+  } yield ()
+
+  override def evalTestGuard(test: AbstractScTest): ScEvalM[PS] = (test match {
+    case _: ScTest =>
+      for {
+        addr <- lookup(test.guardName.name)
+        value <- read(addr)
+        guard <- pure(lattice.getAssumptionGuard(value.pure))
+        _ <- effectful {
+          tracker.guard(test.guardName.name, guard.idn)
+          tracker.test(test.guardName.name, test.idn)
+        }
+      } yield ()
+    case _ => unit
+  }) >> super.evalTestGuard(test)
 
   /** Overrides the original `call` to take the maximum recursion depth into account */
   override def call(
@@ -397,18 +506,21 @@ abstract class ConcolicTesting(
       inputGenerator = InputGenerator(Map())
     )
 
-  protected def reset: Unit = {
+  protected def reset(): Unit = {
     // TODO: put counter for gensym in the state of the concolic tester
     maxdepth = defaultMaxDepth
     ScModSemantics.reset
   }
 
-  def analyzeWithTimeout(timeout: Timeout.T): Unit = {
+  def analyzeWithTimeout(timeout: Timeout.T): Unit =
+    analyzeWithTimeoutInstrumented(timeout)
+
+  def analyzeWithTimeoutInstrumented(timeout: Timeout.T): ScExp = {
     var next: Option[Map[String, Val]] = Some(Map())
     var ccontext = initialContext()
     var iters = 0
     do {
-      reset
+      reset()
       val inputs = next.get
       println(s"Got inputs $inputs")
       val result = analysisIteration(initialContext().copy(root = ccontext.root, inputs = inputs))
@@ -428,6 +540,8 @@ abstract class ConcolicTesting(
     println(_results)
     println(ccontext.root)
     println(s"done in ${iters} iterations")
+    val lastInstrumenter = tracker.replaceVerified(instrumenter)
+    lastInstrumenter.run(exp)
   }
 
   def analyze(): Unit = analyzeWithTimeout(Timeout.none)

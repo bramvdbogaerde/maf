@@ -478,12 +478,19 @@ case class ScGiven(
 
 }
 
+trait AbstractScTest extends ScExp {
+  val guardName: ScIdentifier
+  val guard: ScExp
+  val idn: Identity
+}
+
 /** (test guardName guard) */
 case class ScTest(
     guardName: ScIdentifier,
     guard: ScExp,
     idn: Identity)
-    extends ScExp {
+    extends ScExp
+       with AbstractScTest {
 
   override def fv: Set[String] = guard.fv
 
@@ -497,7 +504,8 @@ case class ScTestVerified(
     guardName: ScIdentifier,
     guard: ScExp,
     idn: Identity)
-    extends ScExp {
+    extends ScExp
+       with AbstractScTest {
 
   override def fv: Set[String] = guard.fv
   override def label: Label = TEST_VERIFIED
@@ -509,7 +517,8 @@ case class ScTestViolated(
     guardName: ScIdentifier,
     guard: ScExp,
     idn: Identity)
-    extends ScExp {
+    extends ScExp
+       with AbstractScTest {
 
   override def fv: Set[String] = guard.fv
   override def label: Label = TEST_VIOLATED
