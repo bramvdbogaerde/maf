@@ -11,6 +11,9 @@ import maf.modular.contracts.semantics.Counter
 import maf.concolicbridge.IdentityGenerator
 import maf.language.contracts.ScAssumed
 import maf.modular.contracts.semantics.ScModSemantics
+import maf.language.contracts.ScLattice.GuardUnverified
+import maf.language.contracts.ScLattice.GuardViolated
+import maf.language.contracts.ScLattice.GuardVerified
 
 trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanticsCollaborativeTesting { outer =>
   override def intraAnalysis(component: Component): AnalysisWithAssumptionsIntra
@@ -163,5 +166,26 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
         runAssumption(name.name, simpleContract.name, expr, arguments, idn)
       }
     }
+
+    /**
+     * Evaluate an if/guard expression.
+     *  In the abstract semantics this will first look up the
+     *  guard and check whether it has been verified or not, if it
+     *  is yet to be verified or is violated, it returns the default expression.
+     */
+    protected def evalIfGuard(
+        guardName: ScIdentifier,
+        consequent: ScExp,
+        alternatives: List[ScExp],
+        idn: Identity
+      ): ScEvalM[PostValue] = for {
+      addr <- lookup(guardName.name)
+      value <- read(addr)
+      guard <- pure(lattice.getAssumptionGuard(value.pure))
+      value <- guard.status match {
+        case GuardVerified                   => eval(consequent)
+        case GuardUnverified | GuardViolated => eval(alternatives.last)
+      }
+    } yield value
   }
 }

@@ -238,6 +238,9 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
       evalDefineAnnotatedFn(name, parameters, contract, expression, idn)
     case ScAssumed(name, simpleContract, expression, arguments, idn) =>
       evalAssumed(name, simpleContract, expression, arguments, idn)
+    case ScIfGuard(name, consequent, alternatives, idn) =>
+      evalIfGuard(name, consequent, alternatives, idn)
+
     case ScProvideContracts(variables, contracts, _) => evalProvideContracts(variables, contracts)
     case exp @ ScCar(pai, _)                         => evalCar(pai, exp)
     case exp @ ScCdr(pai, _)                         => evalCdr(pai, exp)
@@ -264,6 +267,14 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
 
   protected def makeGuard(idn: Identity, state: AssumptionGuardStatus): ScEvalM[PostValue] =
     result(lattice.assumptionGuard(AssumptionGuard(state, idn)))
+
+  /** Evaluate an if/guard expression. */
+  protected def evalIfGuard(
+      guardName: ScIdentifier,
+      consequent: ScExp,
+      alternatives: List[ScExp],
+      idn: Identity
+    ): ScEvalM[PostValue]
 
   def evalAnd(operands: List[ScExp]): ScEvalM[PostValue] =
     operands match {

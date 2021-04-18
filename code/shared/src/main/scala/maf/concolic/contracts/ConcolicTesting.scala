@@ -306,6 +306,14 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
     case _ => result(lattice.schemeLattice.nil)
   }
 
+  /** Evaluates an if/guard to its default expression in the concrete semantics */
+  protected def evalIfGuard(
+      guardName: ScIdentifier,
+      consequent: ScExp,
+      alternatives: List[ScExp],
+      idn: Identity
+    ): ScEvalM[PostValue] = eval(alternatives.reverse.head)
+
   /** In the concrete execution, this does not have any effects */
   override def evalAssumed(
       name: ScIdentifier,

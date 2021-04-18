@@ -510,6 +510,13 @@ case class ScTestViolated(
   override def subexpressions: List[Expression] = List(guard)
 }
 
+/**
+ * (if/guard guard-name
+ *           consequent
+ *           alternative1
+ *           alternative2
+ *           default)
+ */
 case class ScIfGuard(
     guardName: ScIdentifier,
     consequent: ScExp,
@@ -519,6 +526,7 @@ case class ScIfGuard(
   override def fv: Set[String] = consequent.fv ++ alternatives.flatMap(_.fv)
   override def label: Label = IF_GUARDED
   override def subexpressions: List[Expression] = List(consequent) ++ alternatives
+  def default: ScExp = alternatives.last
 }
 
 /**
