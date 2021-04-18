@@ -126,10 +126,6 @@ class RecursiveFunctionInlinining(
         val tArgs = arguments.map(transform)
         ScAssumed(name, tCon, tExp, tArgs, idn)
 
-      case ScGiven(name, expr, idn) =>
-        val tExpr = transform(expr)
-        ScGiven(name, tExpr, idn)
-
       case ScProvideContracts(variables, contracts, idn) =>
         val tCon = contracts.map(transform)
         ScProvideContracts(variables, tCon, idn)

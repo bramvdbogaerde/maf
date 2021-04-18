@@ -3,9 +3,9 @@ package maf.concolicbridge.assumptions
 import maf.core.Identity
 import maf.language.contracts.ScExp
 import maf.language.contracts.ScBegin
-import maf.language.contracts.ScGiven
 import maf.modular.contracts.semantics.ScModSemantics
 import maf.language.contracts.{ScFunctionAp, ScIdentifier, ScValue}
+import maf.language.contracts.ScTest
 
 /**
  * An assumption that withholds a blame if proven to be safe by the concolic tester.
@@ -46,7 +46,7 @@ trait NonBlameAssumption extends AnalysisWithAssumptions {
 
                   ScBegin(
                     List(
-                      ScGiven(
+                      ScTest(
                         assIdentifier(),
                         ScFunctionAp(
                           ScFunctionAp.primitive(

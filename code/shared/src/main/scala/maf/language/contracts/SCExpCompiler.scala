@@ -159,7 +159,7 @@ object SCExpCompiler {
 
     case (Ident("given") :: IdentWithIdentity(name, nameIdn) :: expr :: ListNil(_)) =>
       val compiledExpr = compile(expr)
-      ScGiven(ScIdentifier(name, nameIdn), compiledExpr, prog.idn)
+      ScTest(ScIdentifier(name, nameIdn), compiledExpr, prog.idn)
 
     case (Ident("~>") | Ident("->")) :: contracts =>
       val compiledContracts = compile_fn_contracts(contracts)

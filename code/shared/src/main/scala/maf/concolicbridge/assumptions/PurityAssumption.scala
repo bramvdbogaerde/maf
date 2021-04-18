@@ -78,9 +78,9 @@ trait PurityAssumption extends AnalysisWithAssumptions {
                     List(ScFunctionAp(operator, synOperands, gen.nextIdentity)),
                     ScBegin(
                       identifiers.zip(oldIdentifiers).map { case (newIdent, oldIdent) =>
-                        ScGiven(assumptionIdent(),
-                                ScFunctionAp.primitive("equal?", List(newIdent.apply(), oldIdent.apply()), gen.nextIdentity),
-                                gen.nextIdentity
+                        ScTest(assumptionIdent(),
+                               ScFunctionAp.primitive("equal?", List(newIdent.apply(), oldIdent.apply()), gen.nextIdentity),
+                               gen.nextIdentity
                         )
                       } ++ List(resVarIdent()),
                       gen.nextIdentity

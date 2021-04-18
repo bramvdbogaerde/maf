@@ -4,9 +4,9 @@ import maf.language.contracts.ScExp
 import maf.core.Identity
 import maf.language.contracts.ScAssumed
 import maf.modular.contracts.semantics.ScModSemantics
-import maf.language.contracts.ScGiven
 import maf.language.contracts.ScIdentifier
 import maf.language.contracts.ScBegin
+import maf.language.contracts.ScTest
 
 /**
  * This injects a "value" assumption into the code,
@@ -40,7 +40,7 @@ trait NondetIf extends AnalysisWithAssumptions {
               generator.nextIdentity
             )
 
-            val assertion = ScGiven(
+            val assertion = ScTest(
               nameIdent(),
               condition,
               generator.nextIdentity

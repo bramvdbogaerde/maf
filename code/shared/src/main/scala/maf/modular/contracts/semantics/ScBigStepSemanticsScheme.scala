@@ -135,16 +135,6 @@ trait ScSemantics extends ScAbstractSemanticsMonadAnalysis {
   def evalTestGuard(test: AbstractScTest): ScEvalM[PostValue]
 
   /**
-   * Evaluate a `given` expression. This method is abstract because the implementation
-   * differs from the analyser and the concrete execution
-   */
-  def evalGiven(
-      name: ScIdentifier,
-      expr: ScExp,
-      idn: Identity
-    ): ScEvalM[PostValue]
-
-  /**
    * Returns true if the given path condition is satisfiable
    *
    * @param pc the path condition to solve for
@@ -248,7 +238,6 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
       evalDefineAnnotatedFn(name, parameters, contract, expression, idn)
     case ScAssumed(name, simpleContract, expression, arguments, idn) =>
       evalAssumed(name, simpleContract, expression, arguments, idn)
-    case ScGiven(name, expr, idn)                    => evalGiven(name, expr, idn)
     case ScProvideContracts(variables, contracts, _) => evalProvideContracts(variables, contracts)
     case exp @ ScCar(pai, _)                         => evalCar(pai, exp)
     case exp @ ScCdr(pai, _)                         => evalCdr(pai, exp)
@@ -885,13 +874,6 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
      */
     override def evalTestGuard(test: AbstractScTest): ScEvalM[PostValue] =
       result(lattice.schemeLattice.nil)
-
-    /** Evaluating `given` does not have any effect at analysis time, because the analyser assumes it being true */
-    override def evalGiven(
-        name: ScIdentifier,
-        expr: ScExp,
-        idn: Identity
-      ): ScEvalM[PostValue] = ???
 
     /*==================================================================================================================*/
 

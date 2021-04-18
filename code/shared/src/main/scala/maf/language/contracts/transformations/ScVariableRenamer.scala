@@ -150,9 +150,17 @@ class ScVariableRenamer {
       val transformedArguments = arguments.map(arg => transform(arg, env)._1)
       (ScAssumed(name, simpleContract, transformedExpression, transformedArguments, idn), env)
 
-    case ScGiven(name, expr, idn) =>
+    case ScTest(name, expr, idn) =>
       val transformedExpr = transform(expr, env)._1
-      (ScGiven(name, transformedExpr, idn), env)
+      (ScTest(name, transformedExpr, idn), env)
+
+    case ScTestVerified(name, expr, idn) =>
+      val transformedExpr = transform(expr, env)._1
+      (ScTestVerified(name, transformedExpr, idn), env)
+
+    case ScTestViolated(name, expr, idn) =>
+      val transformedExpr = transform(expr, env)._1
+      (ScTestViolated(name, transformedExpr, idn), env)
 
     case ScProvideContracts(variables, contracts, idn) =>
       val transformedVariables = variables.map(v => lookupIdentifier(v, env))

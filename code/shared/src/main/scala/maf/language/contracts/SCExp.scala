@@ -463,21 +463,6 @@ case class ScOpaque(idn: Identity, refinement: Set[String]) extends ScExp {
     if (refinement.nonEmpty) s"(OPQ ${refinement.mkString(" ")}" else "OPQ"
 }
 
-/** An assertion that must hold for the assumption to be valid */
-case class ScGiven(
-    name: ScIdentifier,
-    expression: ScExp,
-    idn: Identity)
-    extends ScExp {
-
-  override def fv: Set[String] = expression.fv
-
-  override def label: Label = GIVEN
-
-  override def subexpressions: List[Expression] = List(expression)
-
-}
-
 trait AbstractScTest extends ScExp {
   val guardName: ScIdentifier
   val guard: ScExp

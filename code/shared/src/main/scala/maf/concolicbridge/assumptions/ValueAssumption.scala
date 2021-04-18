@@ -4,8 +4,8 @@ import maf.core.Identity
 import maf.language.contracts.ScExp
 import maf.language.contracts.ScIdentifier
 import maf.language.contracts.ScAssumed
-import maf.language.contracts.ScGiven
 import maf.language.contracts.ScFunctionAp
+import maf.language.contracts.ScTest
 
 /**
  * A value assumption uses the value it has been given, and ignores the value
@@ -71,23 +71,23 @@ trait ValueAssumption extends AnalysisWithAssumptions { outer =>
 
     }
 
-    override def evalGiven(
-        name: ScIdentifier,
-        expr: ScExp,
-        idn: Identity
-      ): ScEvalM[PS] =
-      effectful {
-        if (givensToNegate.contains(name.name)) {
-          withInstrumenter { instrumenter =>
-            instrumenter.replaceAt(
-              idn,
-              (generator, exp) => {
-                ScGiven(name, ScFunctionAp.primitive("not", List(expr), generator.nextIdentity), idn)
-              }
-            )
-          }
-        }
-      } >> result(lattice.schemeLattice.nil)
+    //override def evalGiven(
+    //    name: ScIdentifier,
+    //    expr: ScExp,
+    //    idn: Identity
+    //  ): ScEvalM[PS] =
+    //  effectful {
+    //    if (givensToNegate.contains(name.name)) {
+    //      withInstrumenter { instrumenter =>
+    //        instrumenter.replaceAt(
+    //          idn,
+    //          (generator, exp) => {
+    //            ScTest(name, ScFunctionAp.primitive("not", List(expr), generator.nextIdentity), idn)
+    //          }
+    //        )
+    //      }
+    //    }
+    //  } >> result(lattice.schemeLattice.nil)
 
     registerAssumption("value", ValueAssumption)
   }

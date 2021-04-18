@@ -306,12 +306,6 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
     case _ => result(lattice.schemeLattice.nil)
   }
 
-  override def evalGiven(
-      name: ScIdentifier,
-      expr: ScExp,
-      idn: Identity
-    ): ScEvalM[PostValue] = ???
-
   /** In the concrete execution, this does not have any effects */
   override def evalAssumed(
       name: ScIdentifier,
