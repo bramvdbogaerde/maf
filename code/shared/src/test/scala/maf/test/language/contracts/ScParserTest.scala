@@ -186,13 +186,8 @@ class ScParserTest extends AnyFlatSpec with should.Matchers {
   }
 
   "An assumed expression" should "be parsed to ScAssume" in {
-    compile("(assumed name pure f)") should matchPattern {
-      case ScAssumed(ScIdentifier("name", _), ScIdentifier("pure", _), ScIdentifier("f", _), List(), _) =>
+    compile("(assumed pure f)") should matchPattern { case ScAssumed(ScIdentifier("pure", _), List(ScIdentifier("f", _)), _) =>
     }
   }
 
-  "A given expression" should "be parsed to ScGiven" in {
-    compile("(given name f)") should matchPattern { case ScGiven(ScIdentifier("name", _), ScIdentifier("f", _), _) =>
-    }
-  }
 }
