@@ -28,13 +28,10 @@ trait ValueAssumption extends AnalysisWithAssumptions { outer =>
     object ValueAssumption extends Assumption {
       def name: String = "value"
       override def run(
-          name: String,
-          exp: ScExp,
           arg: List[ScExp],
           idn: Identity
         ): ScEvalM[PS] = {
         assert(arg.size >= 1)
-        println(exp)
         if (outer.isViolated(name)) {
           effectful {
             givensToNegate += name
@@ -52,7 +49,7 @@ trait ValueAssumption extends AnalysisWithAssumptions { outer =>
               )
             }
           } >>
-            eval(exp)
+            eval(???)
         } else {
           eval(arg(0))
         }

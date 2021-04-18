@@ -27,8 +27,6 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
       def name: String
 
       def run(
-          name: String,
-          exp: ScExp,
           arg: List[ScExp],
           idn: Identity
         ): ScEvalM[PostValue]
@@ -93,12 +91,11 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
         )
 
       def run(
-          name: String,
-          exp: ScExp,
           args: List[ScExp],
           idn: Identity
         ): ScEvalM[PostValue] = {
-        assert(args.size == 0)
+        assert(args.size == 1)
+        val exp = args(0)
         val exprAddr = allocator.alloc(exp.idn)
         val symbolAddr = allocator.alloc(idn)
         for {
@@ -115,8 +112,6 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
      */
     class TransformationAssumption(val name: String) extends Assumption {
       def run(
-          name: String,
-          exp: ScExp,
           arg: List[ScExp],
           idn: Identity
         ): ScEvalM[PS] = ??? // shouldn't be possible
@@ -139,29 +134,26 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
     }
 
     protected def runAssumption(
-        name: String,
         assumptionName: String,
-        exp: ScExp,
         arguments: List[ScExp],
         idn: Identity
       ): ScEvalM[PostValue] = {
-      availableAssumptions(assumptionName).run(name, exp, arguments, idn)
+      availableAssumptions(assumptionName).run(arguments, idn)
     }
 
     override def evalAssumed(
         simpleContract: ScIdentifier,
         arguments: List[ScExp],
         idn: Identity
-      ): ScEvalM[PostValue] = ???
-    //  val assumption = availableAssumptions(simpleContract.name)
-    //  if (assumption.isViolated(name.name, expr, arguments) || !assumption.isEnabled) {
-    //    // if the assumption was proven to be violated, then
-    //    // we no longer make the assumption
-    //    eval(expr)
-    //  } else {
-    //    runAssumption(name.name, simpleContract.name, expr, arguments, idn)
-    //  }
-    //}
+      ): ScEvalM[PostValue] = {
+      val assumption = availableAssumptions(simpleContract.name)
+      if (!assumption.isEnabled) {
+        // shouldn't happen because it shouldn't be generated in the first place
+        throw new Exception("Assumption is being used without it being enabled")
+      } else {
+        runAssumption(simpleContract.name, arguments, idn)
+      }
+    }
 
     /**
      * Evaluate an if/guard expression.

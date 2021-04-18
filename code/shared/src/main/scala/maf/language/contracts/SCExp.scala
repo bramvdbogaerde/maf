@@ -4,6 +4,10 @@ import maf.core.{Expression, Identifier, Identity, Label}
 import maf.language.sexp.Value
 import maf.util.{Monoid, PrettyPrinter}
 import maf.language.scheme.SchemeExp
+import maf.concolicbridge.IdentityGenerator
+import scala.collection.mutable
+import maf.modular.contracts.semantics.Counter
+import maf.modular.contracts.semantics.ScModSemantics
 
 case object FLAT_CONTRACT extends Label
 case object HIGHER_ORDER_CONTRACT extends Label
@@ -461,6 +465,93 @@ case class ScOpaque(idn: Identity, refinement: Set[String]) extends ScExp {
 
   override def toString: String =
     if (refinement.nonEmpty) s"(OPQ ${refinement.mkString(" ")}" else "OPQ"
+}
+
+/**
+ * An assumption builder generates an AST that can be used by
+ * an instrumenter to patch the current AST tree.
+ *
+ * It builds an AST that conforms to the following template:
+ *
+ * (let
+ *   ((guard-name (make-guard)))
+ *   local-variables
+ *   pre-tests
+ *   (let ((resvar body))
+ *      post-tests
+ *      resvar))
+ */
+class AssumptionBuilder(generator: IdentityGenerator)(implicit counter: Counter) {
+  private val guardName: String = ScModSemantics.genSym
+  private val preTests: mutable.ArrayBuffer[ScExp] = new mutable.ArrayBuffer()
+  private val postTests: mutable.ArrayBuffer[ScExp] = new mutable.ArrayBuffer()
+  private val localVariables: mutable.Map[ScIdentifier, ScExp] = mutable.Map()
+  private var _body: Option[ScExp] = None
+
+  /** Generates an identifier for the guard name */
+  private def guardIdent: ScIdentifier = ScIdentifier(guardName, generator.nextIdentity)
+
+  /** Set the body of the assumption structure */
+  def body(e: ScExp): AssumptionBuilder = {
+    _body = Some(e)
+    this
+  }
+
+  /** Adds a pre test */
+  def addPreTest(e: ScExp): AssumptionBuilder = {
+    preTests.append(e)
+    this
+  }
+
+  /** Adds a post test */
+  def addPostTest(e: ScExp): AssumptionBuilder = {
+    postTests.append(e)
+    this
+  }
+
+  /** Registers the a local variable with the given name and value */
+  def localVar(name: String, value: ScExp): AssumptionBuilder = {
+    localVariables.put(ScIdentifier(name, generator.nextIdentity), value)
+    this
+  }
+
+  def guarded(
+      consequent: ScExp,
+      alternatives: List[ScExp],
+      default: ScExp
+    ): ScExp = {
+    ScIfGuard(guardIdent, consequent, alternatives ++ List(default), generator.nextIdentity)
+  }
+
+  def build: ScExp = {
+    val preTests = this.preTests.map(e => ScTest(guardIdent, e, generator.nextIdentity))
+    val postTests = this.postTests.map(e => ScTest(guardIdent, e, generator.nextIdentity))
+    val resVar = ScModSemantics.genSym
+    val resIdent = () => ScIdentifier(resVar, generator.nextIdentity)
+
+    ScLetRec(
+      List(guardIdent),
+      List(ScFunctionAp.primitive("make-guard", List(), generator.nextIdentity)),
+      ScLetRec(
+        localVariables.keySet.toList,
+        localVariables.values.toList,
+        ScBegin(
+          preTests.toList ++
+            List(
+              ScLetRec(List(resIdent()),
+                       List(_body.get),
+                       ScBegin(postTests.toList ++ List(resIdent()), generator.nextIdentity),
+                       generator.nextIdentity
+              )
+            ),
+          generator.nextIdentity
+        ),
+        generator.nextIdentity
+      ),
+      generator.nextIdentity
+    )
+  }
+
 }
 
 trait AbstractScTest extends ScExp {

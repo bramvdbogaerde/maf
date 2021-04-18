@@ -54,7 +54,8 @@ trait PurityAssumption extends AnalysisWithAssumptions {
               instrumenter.replaceAt(
                 idn,
                 (gen, expr) => {
-                  val assumptionIdent = () => ScIdentifier(assumptionName, gen.nextIdentity)
+                  val builder = new AssumptionBuilder(gen)
+
                   // generate the set of impacted variables
                   // TODO: this set of variables can be made smaller by checking which ones are actually used for the
                   // path condition
@@ -66,44 +67,29 @@ trait PurityAssumption extends AnalysisWithAssumptions {
                   // generate names such as old-y and old-x
                   val oldNames = variables.map(_ => ScModSemantics.genSym)
                   val oldIdentifiers = oldNames.map(name => () => ScIdentifier(name, gen.nextIdentity))
+
                   // generate the assumption itself
-                  val assumption = ScAssumed(ScIdentifier("pure", gen.nextIdentity), List(), gen.nextIdentity)
+                  val assumption =
+                    builder.guarded(ScAssumed(ScIdentifier("pure", gen.nextIdentity), List(synOperator), gen.nextIdentity), List(), synOperator)
 
-                  val operator = ScModSemantics.freshIdent
+                  val operator = ScModSemantics.genSym
 
-                  val resVar = ScModSemantics.genSym
-                  val resVarIdent = () => ScIdentifier(resVar, gen.nextIdentity)
-                  val functionAp = ScLetRec(
-                    List(resVarIdent()),
-                    List(ScFunctionAp(operator, synOperands, gen.nextIdentity)),
-                    ScBegin(
-                      identifiers.zip(oldIdentifiers).map { case (newIdent, oldIdent) =>
-                        ScTest(assumptionIdent(),
-                               ScFunctionAp.primitive("equal?", List(newIdent.apply(), oldIdent.apply()), gen.nextIdentity),
-                               gen.nextIdentity
-                        )
-                      } ++ List(resVarIdent()),
-                      gen.nextIdentity
-                    ),
-                    gen.nextIdentity
-                  )
+                  // keep track of the function we are going to apply
+                  builder.localVar(operator, assumption)
 
-                  /* (f x) -->
-                   * (letrec
-                   *   ((f (assumed purity pure f))
-                   *    (y old-y))
-                   *
-                   *   (f x)
-                   *   (given purity (= y old-y)))
-                   */
-                  ScLetRec(
-                    List(operator.asInstanceOf[ScIdentifier]) ++ oldIdentifiers.map(_.apply()),
-                    List(assumption) ++ identifiers.map(_.apply()),
-                    functionAp,
-                    gen.nextIdentity
-                  )
+                  // execute the function itself
+                  builder.body(ScFunctionAp(ScIdentifier(operator, gen.nextIdentity), synOperands, gen.nextIdentity))
+
+                  // remember the values of the variables before the call, and check if they are still the same after the call
+                  identifiers.zip(oldIdentifiers).foreach { case (newIdent, oldIdent) =>
+                    builder
+                      .localVar(newIdent().name, oldIdent())
+                      .addPostTest(ScFunctionAp.primitive("equal?", List(newIdent.apply(), oldIdent.apply()), gen.nextIdentity))
+                  }
+
+                  builder.build
                 }
-              );
+              )
             }
           } >>
             unit
