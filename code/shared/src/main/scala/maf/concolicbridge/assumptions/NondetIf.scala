@@ -33,9 +33,7 @@ trait NondetIf extends AnalysisWithAssumptions {
           (generator, exp) => {
             val nameIdent = () => ScIdentifier(name, generator.nextIdentity)
             val assumption = ScAssumed(
-              nameIdent(),
               ScIdentifier("value", generator.nextIdentity),
-              exp,
               List(consequent, alternative),
               generator.nextIdentity
             )

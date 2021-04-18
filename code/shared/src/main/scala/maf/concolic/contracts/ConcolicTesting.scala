@@ -316,12 +316,11 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
 
   /** In the concrete execution, this does not have any effects */
   override def evalAssumed(
-      name: ScIdentifier,
       simpleContract: ScIdentifier,
-      expr: ScExp,
       arguments: List[ScExp],
       idn: Identity
-    ): ScEvalM[PostValue] = eval(expr)
+    ): ScEvalM[PostValue] =
+    throw new Exception("cannot assume anything in the concrete execution") // should never be executed
 
   /**
    * Solves the given path condition and returns true if it is satisfiable, as we only work with concrete values

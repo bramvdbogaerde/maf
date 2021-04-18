@@ -87,9 +87,7 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
       def name: String = tag
       def applyTo(e: ScExp)(gen: IdentityGenerator): ScExp =
         ScAssumed(
-          name = ScIdentifier(ScModSemantics.genSym, gen.nextIdentity),
           simpleContract = ScIdentifier(tag, gen.nextIdentity),
-          expression = e,
           arguments = List(),
           idn = gen.nextIdentity
         )
@@ -151,21 +149,19 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
     }
 
     override def evalAssumed(
-        name: ScIdentifier,
         simpleContract: ScIdentifier,
-        expr: ScExp,
         arguments: List[ScExp],
         idn: Identity
-      ): ScEvalM[PostValue] = {
-      val assumption = availableAssumptions(simpleContract.name)
-      if (assumption.isViolated(name.name, expr, arguments) || !assumption.isEnabled) {
-        // if the assumption was proven to be violated, then
-        // we no longer make the assumption
-        eval(expr)
-      } else {
-        runAssumption(name.name, simpleContract.name, expr, arguments, idn)
-      }
-    }
+      ): ScEvalM[PostValue] = ???
+    //  val assumption = availableAssumptions(simpleContract.name)
+    //  if (assumption.isViolated(name.name, expr, arguments) || !assumption.isEnabled) {
+    //    // if the assumption was proven to be violated, then
+    //    // we no longer make the assumption
+    //    eval(expr)
+    //  } else {
+    //    runAssumption(name.name, simpleContract.name, expr, arguments, idn)
+    //  }
+    //}
 
     /**
      * Evaluate an if/guard expression.

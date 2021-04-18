@@ -85,9 +85,7 @@ trait RecursiveAssumption extends ScBigStepSemanticsScheme with ScModSemanticsCo
               (generator, exp) => {
                 val nameIdn = () => ScIdentifier(name, generator.nextIdentity)
                 ScAssumed(
-                  nameIdn(),
                   ScIdentifier("inline", generator.nextIdentity),
-                  recursiveCall.syntactic,
                   List(inlinedLambda),
                   generator.nextIdentity
                 )

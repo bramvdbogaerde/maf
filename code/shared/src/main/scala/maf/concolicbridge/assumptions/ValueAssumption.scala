@@ -44,9 +44,7 @@ trait ValueAssumption extends AnalysisWithAssumptions { outer =>
                 (generator, exp) => {
                   // replace the assumption with the alternative
                   ScAssumed(
-                    ScIdentifier(name, generator.nextIdentity),
                     ScIdentifier("value", generator.nextIdentity),
-                    exp,
                     arg.tail,
                     idn
                   )

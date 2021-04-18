@@ -104,11 +104,10 @@ case class Instrumenter(replacementNodes: Map[Identity, (IdentityGenerator, ScEx
           val instrumentedExpression = ScBegin(expression.expressions.map(run), expression.idn)
           ScDefineAnnotatedFn(name, parameters, instrumentedContract, instrumentedExpression, idn)
 
-        case ScAssumed(name, simpleContract, expression, arguments, idn) =>
+        case ScAssumed(simpleContract, arguments, idn) =>
           val instrumentedSimpleContract = run(simpleContract).asInstanceOf[ScIdentifier]
-          val instrumentedExpression = run(expression)
           val instrumentedArguments = arguments.map(run)
-          ScAssumed(name, instrumentedSimpleContract, instrumentedExpression, instrumentedArguments, idn)
+          ScAssumed(instrumentedSimpleContract, instrumentedArguments, idn)
 
         case ScTest(name, exp, idn) =>
           ScTest(name, run(exp), idn)

@@ -532,27 +532,29 @@ case class ScIfGuard(
 /**
  * An assumption of the form:
  *
- * (assumed name simpleContract exression)
+ * (assumed simpleContract exression)
  *
  * Example:
  *
- * (define f (assumed simple-f-pure pure f))
- * (f)
- * (given simple-f (= x old-x))
+ * (let
+ *   ((f-is-pure (make-assumption))
+ *    (old-x x))
+ *
+ *   (define f (if/guarded (assumed pure f) f))
+ *   (f)
+ *   (test f-is-pure (equal? x old-x)))
  */
 case class ScAssumed(
-    name: ScIdentifier,
     simpleContract: ScIdentifier,
-    expression: ScExp,
     arguments: List[ScExp],
     idn: Identity)
     extends ScExp {
 
-  override def fv: Set[String] = expression.fv
+  override def fv: Set[String] = Set()
 
   override def label: Label = ASSUMED
 
-  override def subexpressions: List[Expression] = List(expression)
+  override def subexpressions: List[Expression] = List()
 
 }
 

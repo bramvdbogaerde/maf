@@ -67,7 +67,7 @@ trait PurityAssumption extends AnalysisWithAssumptions {
                   val oldNames = variables.map(_ => ScModSemantics.genSym)
                   val oldIdentifiers = oldNames.map(name => () => ScIdentifier(name, gen.nextIdentity))
                   // generate the assumption itself
-                  val assumption = ScAssumed(assumptionIdent(), ScIdentifier("pure", gen.nextIdentity), synOperator, List(), gen.nextIdentity)
+                  val assumption = ScAssumed(ScIdentifier("pure", gen.nextIdentity), List(), gen.nextIdentity)
 
                   val operator = ScModSemantics.freshIdent
 

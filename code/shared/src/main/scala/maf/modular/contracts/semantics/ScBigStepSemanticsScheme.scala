@@ -121,9 +121,7 @@ trait ScSemantics extends ScAbstractSemanticsMonadAnalysis {
    * differs from the analyser and the concrete execution
    */
   def evalAssumed(
-      name: ScIdentifier,
       simpleContract: ScIdentifier,
-      expr: ScExp,
       arguments: List[ScExp],
       idn: Identity
     ): ScEvalM[PostValue]
@@ -236,8 +234,8 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
     case ScDefineFn(name, parameters, body, idn)     => evalDefineFn(name, parameters, body, idn)
     case ScDefineAnnotatedFn(name, parameters, contract, expression, idn) =>
       evalDefineAnnotatedFn(name, parameters, contract, expression, idn)
-    case ScAssumed(name, simpleContract, expression, arguments, idn) =>
-      evalAssumed(name, simpleContract, expression, arguments, idn)
+    case ScAssumed(simpleContract, arguments, idn) =>
+      evalAssumed(simpleContract, arguments, idn)
     case ScIfGuard(name, consequent, alternatives, idn) =>
       evalIfGuard(name, consequent, alternatives, idn)
 
