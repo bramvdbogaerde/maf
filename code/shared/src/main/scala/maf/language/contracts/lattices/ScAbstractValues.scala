@@ -66,7 +66,11 @@ trait ScAbstractValues[A <: Address] {
         case (Clos(a), Clos(b))                   => Clos(a ++ b)
         case (AssumedValues(a), AssumedValues(b)) => AssumedValues(a ++ b)
         case (AssumptionGuards(a), AssumptionGuards(b)) =>
-          throw new Exception("Cannot join assumption guards together")
+          if (a == b) {
+            AssumptionGuards(a)
+          } else {
+            throw new Exception("Cannot join assumption guards together")
+          }
         case _ => throw new Exception(s"Illegal join $x $y")
       }
 

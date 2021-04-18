@@ -83,7 +83,7 @@ trait PurityAssumption extends AnalysisWithAssumptions {
                   // remember the values of the variables before the call, and check if they are still the same after the call
                   identifiers.zip(oldIdentifiers).foreach { case (newIdent, oldIdent) =>
                     builder
-                      .localVar(newIdent().name, oldIdent())
+                      .localVar(oldIdent().name, newIdent())
                       .addPostTest(ScFunctionAp.primitive("equal?", List(newIdent.apply(), oldIdent.apply()), gen.nextIdentity))
                   }
 

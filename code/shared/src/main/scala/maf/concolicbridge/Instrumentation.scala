@@ -118,6 +118,11 @@ case class Instrumenter(replacementNodes: Map[Identity, (IdentityGenerator, ScEx
         case ScTestViolated(name, exp, idn) =>
           ScTestViolated(name, run(exp), idn)
 
+        case ScIfGuard(name, cons, alts, idn) =>
+          val instrumentedCons = run(cons)
+          val instrumentedAlts = alts.map(run(_))
+          ScIfGuard(name, instrumentedCons, instrumentedAlts, idn)
+
         case ScProvideContracts(variables, contracts, idn) =>
           val instrumentedContracts = contracts.map(run)
           ScProvideContracts(variables, instrumentedContracts, idn)
