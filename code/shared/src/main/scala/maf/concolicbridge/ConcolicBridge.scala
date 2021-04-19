@@ -5,6 +5,10 @@ import maf.concolic.contracts.ConcolicTesting
 import maf.util.benchmarks.Timeout
 import maf.concolicbridge.assumptions.Tracker
 
+sealed trait AnalysisState
+case object Finished extends AnalysisState
+case class Suspended(exp: ScExp, tracker: Tracker)(val k: (ScExp, Tracker) => AnalysisState) extends AnalysisState
+
 /** A type of analysis that combines concolic testing with the static analyser */
 abstract class ConcolicBridge(exp: ScExp) {
 
@@ -22,46 +26,55 @@ abstract class ConcolicBridge(exp: ScExp) {
 
   def analyze(): Unit = analyzeWithTimeout(Timeout.none)
 
-  private def analysisRun(
+  def sunspendableAnalyze(
       exp: ScExp,
       timeout: Timeout.T,
-      verified: Set[String] = Set(),
-      violated: Set[String] = Set(),
       tracker: Tracker = Tracker()
-    ): Unit = {
+    ): AnalysisState = {
     if (timeout.reached) {
       throw new Exception("timeout reached")
     }
 
     // first we create a new analysis instance and run it
     val analysis = modAnalysis(exp)
-    verified.foreach(analysis.registerVerified)
     analysis.tracker = tracker
     disabled.foreach(analysis.disableAssumption)
 
     analysis.analyzeWithTimeout(timeout)
-
     // then we apply any instrumentation that might have been
     // introduced by the modular analysis
     val instrumented = analysis.instrumenter.run(exp)
 
     if (instrumented != exp) {
-      println(s"New program: ${instrumented}")
-      // finally we pass the instrumented expression to the
-      // concolic tester and make it search for potential errors
-      val tester = concolicTester(instrumented)
-      val updated = tester.analyzeWithTimeoutInstrumented(timeout)
+      Suspended(instrumented, tracker) { (exp, tracker) =>
+        println(s"New program: ${exp}")
+        // finally we pass the instrumented expression to the
+        // concolic tester and make it search for potential errors
+        val tester = concolicTester(exp)
+        val updated = tester.analyzeWithTimeoutInstrumented(timeout)
 
-      val newVerified = analysis.tracker.allAssumptions
-
-      // only continue to the next run if the violations or verified set
-      // changes
-      if (instrumented != updated) {
-        println(s"Got answer back from the concolic tester $updated")
-        // continue to the next run
-        analysisRun(updated, timeout, newVerified, Set(), analysis.copyTracker)
+        if (updated != exp) {
+          Suspended(updated, tracker) { (exp, tracker) => sunspendableAnalyze(exp, timeout, tracker) }
+        } else {
+          Finished
+        }
       }
+    } else {
+      Finished
     }
+  }
+
+  private def analysisRun(
+      exp: ScExp,
+      timeout: Timeout.T,
+      tracker: Tracker = Tracker()
+    ): Unit = {
+    def loop(state: AnalysisState): Unit = state match {
+      case s @ Suspended(exp, tracker) =>
+        loop(s.k(exp, tracker))
+      case Finished => ()
+    }
+    loop(sunspendableAnalyze(exp, timeout, tracker))
   }
 
   def analyzeWithTimeout(timeout: Timeout.T): Unit =
