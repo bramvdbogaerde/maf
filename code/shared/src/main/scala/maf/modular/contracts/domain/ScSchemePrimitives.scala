@@ -84,7 +84,6 @@ trait ScSchemePrimitives extends ScModSemanticsScheme with GlobalStore[ScExp] {
       val primAddr = ScPrimAddr(name)
       val grd = implies.asGrd(name)
       store += contractAddr -> grd
-      println(s"looking up ${name}")
       store += primAddr -> lattice.schemeLattice.primitive(name)
       store += ScMonitoredPrimAddr(name) -> lattice.arr(
         Arr(Identity.none, Identity.none, contractAddr, primAddr)

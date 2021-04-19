@@ -15,8 +15,8 @@ import maf.modular.contracts.ScAddresses
 import maf.modular.contracts.semantics.{ScModSemantics, ScSharedSemantics}
 import maf.util.benchmarks.Timeout
 import maf.language.contracts.ScLattice.AssumedValue
-import maf.language.contracts.lattices.ScConcreteValues.ConsValue
 import maf.language.contracts.ScLattice.AssumptionGuard
+import maf.ScSettings._
 import maf.concolicbridge.Instrumenter
 
 case class PrimitiveNotFound(name: String) extends Exception {
@@ -523,7 +523,9 @@ abstract class ConcolicTesting(
     do {
       reset()
       val inputs = next.get
-      println(s"Got inputs $inputs")
+      if (DEBUG_CONCOLIC) {
+        println(s"Got inputs $inputs")
+      }
       val result = analysisIteration(initialContext().copy(root = ccontext.root, inputs = inputs))
       ccontext = result._1
       val value = result._2
@@ -538,9 +540,11 @@ abstract class ConcolicTesting(
     } while (next.isDefined && !timeout.reached && iters < 10)
 
     _tree = ccontext.root
-    println(_results)
-    println(ccontext.root)
-    println(s"done in ${iters} iterations")
+    if (DEBUG_CONCOLIC) {
+      println(_results)
+      println(ccontext.root)
+      println(s"done in ${iters} iterations")
+    }
     val lastInstrumenter = tracker.replaceVerified(instrumenter)
     lastInstrumenter.run(exp)
   }

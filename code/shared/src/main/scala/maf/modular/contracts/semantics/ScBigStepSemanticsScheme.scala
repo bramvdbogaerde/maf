@@ -8,6 +8,7 @@ import maf.language.sexp.Value
 import maf.modular.contracts._
 import maf.concolicbridge.ScModSemanticsCollaborativeTesting
 import maf.core.Address
+import maf.ScSettings._
 import maf.ScSettings
 
 /**
@@ -1127,16 +1128,20 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
         throw new Exception("Timeout exceeded")
       }
 
-      println("================================")
-      println(s"Analyzing component $component")
+      if (DEBUG_STATIC) {
+        println("================================")
+        println(s"Analyzing component $component")
+      }
 
       val computation = (injectRefinements >> eval(fnBody) >>= checkRangeContract)
       val (value, sstore, _) = compute(computation)(initialContext)
       //writeReturnStore(sstore)
       writeResult(value, component)
 
-      println(s"Return value $value")
-      println("==================================")
+      if (DEBUG_STATIC) {
+        println(s"Return value $value")
+        println("==================================")
+      }
     }
   }
 

@@ -8,7 +8,6 @@ import maf.concolic.contracts.ConcolicTesting
 import maf.concolic.ConcolicTestingJVM
 import maf.language.contracts.SCExpCompiler
 import maf.modular.contracts.semantics.ScModSemanticsScheme
-import maf.language.contracts.ScLattice.AssumptionGuard
 import maf.language.contracts.ScLattice.GuardUnverified
 import maf.language.contracts.ScLattice.GuardVerified
 import maf.language.contracts.ScLattice.GuardViolated

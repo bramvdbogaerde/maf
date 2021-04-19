@@ -5,7 +5,7 @@ import maf.util.benchmarks.Timeout
 import maf.concolicbridge.assumptions.Tracker
 
 trait ScModSemanticsCollaborativeTesting extends ScModSemanticsScheme {
-  protected var enabledAssumptions: Map[String, Boolean] = Map(
+  var enabledAssumptions: Map[String, Boolean] = Map(
     "pure" -> true,
     "value" -> true,
     "inline" -> true,

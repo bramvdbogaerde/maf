@@ -6,11 +6,31 @@ import maf.util.PrettyPrinter
 class Printer {
   private val printer: PrettyPrinter = new PrettyPrinter
 
+  implicit class ListOps[X](list: List[X]) {
+    def safeInit: List[X] = list match {
+      case List() => List()
+      case _      => list.init
+    }
+  }
+
+  def display(e: ScExp): Unit = {
+    run(e)
+    print(printer.render)
+  }
+
   def run(e: ScExp): Unit = e match {
     case ScBegin(expressions, _) =>
       printer.print("(begin ")
       printer.newIndent()
-      expressions.map(run)
+      if (expressions.nonEmpty) {
+        expressions.init.foreach { e =>
+          run(e)
+          printer.newline()
+        }
+
+        run(expressions.last)
+      }
+
       printer.print(")")
       printer.exitIndent()
 
@@ -28,17 +48,25 @@ class Printer {
       printer.print("(let")
       printer.newIndent()
       printer.print("(")
-      val last = idents.last
-      idents.zip(bindings).map { case (ident, binding) =>
-        printer.print("(")
-        printer.print(ident.name)
-        printer.print(" ")
-        run(binding)
-        printer.print(")")
-        if (last.idn != ident.idn) {
-          printer.newline()
+      if (idents.nonEmpty) {
+        val last = idents.last
+        idents.zip(bindings).map { case (ident, binding) =>
+          printer.print("(")
+          printer.print(ident.name)
+          printer.print(" ")
+          run(binding)
+          printer.print(")")
+          if (last.idn != ident.idn) {
+            printer.newline()
+          }
         }
       }
+
+      printer.print(")")
+      printer.newline()
+      run(body)
+      printer.exitIndent()
+      printer.print(")")
 
     case ScSet(variable, value, idn) =>
       printer.print("(set! ")
@@ -50,13 +78,15 @@ class Printer {
     case ScFunctionAp(operator, operands, idn, _) =>
       printer.print("(")
       run(operator)
-      printer.print(" ")
-      operands.init.foreach { operand =>
-        run(operand)
+      if (operands.nonEmpty) {
         printer.print(" ")
-      }
+        operands.init.foreach { operand =>
+          run(operand)
+          printer.print(" ")
+        }
 
-      run(operands.last)
+        run(operands.last)
+      }
       printer.print(")")
 
     case v: ScValue =>
@@ -77,13 +107,15 @@ class Printer {
 
     case ScDependentContract(domains, rangeMaker, idn) =>
       printer.print("(~ ")
-      domains.init.foreach { domain =>
-        run(domain)
+      if (domains.nonEmpty) {
+        domains.init.foreach { domain =>
+          run(domain)
+          printer.print(" ")
+        }
+
+        run(domains.last)
         printer.print(" ")
       }
-
-      run(domains.last)
-      printer.print(" ")
       run(rangeMaker)
       printer.print(")")
 
@@ -92,11 +124,13 @@ class Printer {
 
     case ScLambda(params, body, idn) =>
       printer.print("(lambda (")
-      params.init.foreach { param =>
-        run(param)
-        printer.print(" ")
+      if (params.nonEmpty) {
+        params.init.foreach { param =>
+          run(param)
+          printer.print(" ")
+        }
+        run(params.last)
       }
-      run(params.last)
       printer.print(")")
       printer.newIndent()
       run(body)
@@ -105,6 +139,7 @@ class Printer {
     case ScProgram(expressions, idn) =>
       expressions.foreach { exp =>
         run(exp)
+        printer.newline()
       }
 
     case ScDefine(variable, expression, idn) =>
@@ -117,11 +152,14 @@ class Printer {
       printer.print("(define ")
       printer.print("(")
       run(name)
-      parameters.init.foreach { param =>
-        run(param)
-        printer.print(" ")
+      printer.print("  ")
+      if (parameters.nonEmpty) {
+        parameters.init.foreach { param =>
+          run(param)
+          printer.print(" ")
+        }
+        run(parameters.last)
       }
-      run(parameters.last)
       printer.print(")")
       printer.newIndent()
       run(body)
@@ -132,11 +170,13 @@ class Printer {
       printer.print("(define/contract ")
       printer.print("(")
       run(name)
-      parameters.init.foreach { param =>
-        run(param)
-        printer.print(" ")
+      if (parameters.nonEmpty) {
+        parameters.init.foreach { param =>
+          run(param)
+          printer.print(" ")
+        }
+        run(parameters.last)
       }
-      run(parameters.last)
       printer.print(")")
       printer.newIndent()
       run(contract)
@@ -149,11 +189,13 @@ class Printer {
       printer.print("(assumed ")
       printer.print(simpleContract.name)
       printer.print(" ")
-      arguments.init.foreach { arg =>
-        run(arg)
-        printer.print(" ")
+      if (arguments.nonEmpty) {
+        arguments.init.foreach { arg =>
+          run(arg)
+          printer.print(" ")
+        }
+        run(arguments.last)
       }
-      run(arguments.last)
       printer.print(")")
 
     case ScTest(name, exp, idn) =>
@@ -183,12 +225,14 @@ class Printer {
       printer.newIndent()
       run(cons)
       printer.newline()
-      alts.init.foreach { alt =>
-        run(alt)
-        printer.newline()
-      }
+      if (alts.nonEmpty) {
+        alts.init.foreach { alt =>
+          run(alt)
+          printer.newline()
+        }
 
-      run(alts.last)
+        run(alts.last)
+      }
       printer.exitIndent()
       printer.print(")")
 
