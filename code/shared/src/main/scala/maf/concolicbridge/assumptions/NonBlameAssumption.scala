@@ -49,8 +49,16 @@ trait NonBlameAssumption extends AnalysisWithAssumptions with HoldsAssumptionAna
                     List(syntacticOperator.get, ScValue.num(domainContract.get, gen.nextIdentity)),
                     gen.nextIdentity
                   )
-                  builder.addPreTest(ScFunctionAp(contract, List(exp), gen.nextIdentity))
-                  builder.guarded(HoldsAssumption.applyTo(exp)(gen), List(), exp)
+                  val localVarName = ScModSemantics.genSym
+                  builder.localVar(localVarName, exp)
+                  builder.addPreTest(ScFunctionAp(contract, List(builder.getLocalVar(localVarName)), gen.nextIdentity))
+                  builder.body(
+                    builder.guarded(HoldsAssumption.applyTo(builder.getLocalVar(localVarName))(gen), List(), builder.getLocalVar(localVarName))
+                  )
+
+                  val finalExp = builder.build
+                  tracker.add("nonblame", finalExp.idn)
+                  finalExp
                 }
               )
             }

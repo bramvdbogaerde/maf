@@ -83,66 +83,66 @@ class CollaborativeAnalysisTest extends ScTestsJVMGlobalStore {
     result.finalResult shouldEqual result.lattice.schemeLattice.boolTop
   }
 
-  //"nonblame assumption" should "fully verify a contract program without blaming" in {
-  //  val program = """(define (</c x) (lambda (y) (< y x)))
-  //   (define/contract (h x) (~ (</c 5) (lambda (x) number?))
-  //     42)
+  "nonblame assumption" should "fully verify a contract program without blaming" in {
+    val program = """(define (</c x) (lambda (y) (< y x)))
+     (define/contract (h x) (~ (</c 5) (lambda (x) number?))
+       42)
 
-  //   (define (g x) (h x))
-  //   (define (f x)
-  //     (if (< x 5) (g x) #f))
-  //   (f 2)
-  //   (f 3)
-  //  """
+     (define (g x) (h x))
+     (define (f x)
+       (if (< x 5) (g x) #f))
+     (f 2)
+     (f 3)
+    """
 
-  //  val result = withModifiedAnalysis(program) { analysis =>
-  //    analysis.disable("pure")
-  //    analysis.disable("value")
-  //    analysis.disable("nondetif")
-  //  }
+    val result = withModifiedAnalysis(program) { analysis =>
+      analysis.disable("pure")
+      analysis.disable("value")
+      analysis.disable("nondetif")
+    }
 
-  //  result.summary.blames.values.toSet shouldEqual Set()
-  //}
+    result.summary.blames.values.toSet shouldEqual Set()
+  }
 
-  //"nonblame assumption" should "should be able to be disabled" in {
-  //  val program = """(define (</c x) (lambda (y) (< y x)))
-  //   (define/contract (h x) (~ (</c 5) (lambda (x) number?))
-  //     42)
+  "nonblame assumption" should "should be able to be disabled" in {
+    val program = """(define (</c x) (lambda (y) (< y x)))
+     (define/contract (h x) (~ (</c 5) (lambda (x) number?))
+       42)
 
-  //   (define (g x) (h x))
-  //   (define (f x)
-  //     (if (< x 5) (g x) #f))
-  //   (f 2)
-  //   (f 3)
-  //  """
+     (define (g x) (h x))
+     (define (f x)
+       (if (< x 5) (g x) #f))
+     (f 2)
+     (f 3)
+    """
 
-  //  val result = withModifiedAnalysis(program) { analysis =>
-  //    analysis.disable("pure")
-  //    analysis.disable("value")
-  //    analysis.disable("nondetif")
-  //    analysis.disable("nonblame")
-  //  }
+    val result = withModifiedAnalysis(program) { analysis =>
+      analysis.disable("pure")
+      analysis.disable("value")
+      analysis.disable("nondetif")
+      analysis.disable("nonblame")
+    }
 
-  //  result.summary.blames.values.size should be > 0
-  //}
+    result.summary.blames.values.size should be > 0
+  }
 
-  //"nonblame assumption" should "should be able to verify cross-component path conditions" in {
-  //  val program = """(define (</c x) (lambda (y) (< y x)))
-  //   (define/contract (h x) (~ (</c 5) (lambda (x) number?))
-  //     42)
+  "nonblame assumption" should "should be able to verify cross-component path conditions" in {
+    val program = """(define (</c x) (lambda (y) (< y x)))
+     (define/contract (h x) (~ (</c 5) (lambda (x) number?))
+       42)
 
-  //   (define (g x) (h x))
-  //   (define (f x)
-  //     (if (< x 5) (g x) #f))
-  //   (f (OPQ number?))
-  //  """
+     (define (g x) (h x))
+     (define (f x)
+       (if (< x 5) (g x) #f))
+     (f (OPQ number?))
+    """
 
-  //  val result = withModifiedAnalysis(program) { analysis =>
-  //    analysis.disable("pure")
-  //    analysis.disable("value")
-  //    analysis.disable("nondetif")
-  //  }
+    val result = withModifiedAnalysis(program) { analysis =>
+      analysis.disable("pure")
+      analysis.disable("value")
+      analysis.disable("nondetif")
+    }
 
-  //  result.summary.blames.values.size shouldEqual 0
-  //}
+    result.summary.blames.values.size shouldEqual 0
+  }
 }

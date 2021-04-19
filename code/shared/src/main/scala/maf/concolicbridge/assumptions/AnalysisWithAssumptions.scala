@@ -52,7 +52,7 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
           .getAssumedValues(value.pure)
           .map(ass =>
             read(ass.simpleContract)
-              .map(value => value == lattice.schemeLattice.symbol(tag))
+              .map(value => value.pure == lattice.schemeLattice.symbol(tag))
           )
           .toList
 
@@ -86,7 +86,7 @@ trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanti
       def applyTo(e: ScExp)(gen: IdentityGenerator): ScExp =
         ScAssumed(
           simpleContract = ScIdentifier(tag, gen.nextIdentity),
-          arguments = List(),
+          arguments = List(e),
           idn = gen.nextIdentity
         )
 

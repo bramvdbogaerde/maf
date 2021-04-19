@@ -665,7 +665,7 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
       syntacticExpression: Option[ScExp],
       syntacticOperator: Option[ScExp],
       domainContract: Option[Int]
-    ): ScEvalM[PostValue] =
+    ): ScEvalM[PostValue] = {
     applyFn(contract,
             List(expressionValue),
             ScNil(),
@@ -686,6 +686,7 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
         )
         afterHook
       }
+  }
 
   def cond[X](
       condition: PostValue,

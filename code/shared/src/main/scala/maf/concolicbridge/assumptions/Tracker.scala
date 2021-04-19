@@ -18,7 +18,7 @@ import maf.modular.contracts.semantics.Counter
  *  assert(tracker.contains("pure", idn))
  * </code>
  */
-class Tracker(private var assumptions: Map[String, List[Identity]] = Map()) {
+class Tracker(var assumptions: Map[String, List[Identity]] = Map()) {
 
   /**
    * Add a new assumption to be tracked

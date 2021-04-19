@@ -497,6 +497,11 @@ class AssumptionBuilder(generator: IdentityGenerator)(implicit counter: Counter)
     this
   }
 
+  /** Creates a fresh identifier for a variable with the given name */
+  def getLocalVar(name: String): ScIdentifier = {
+    ScIdentifier(name, generator.nextIdentity)
+  }
+
   /** Adds a pre test */
   def addPreTest(e: ScExp): AssumptionBuilder = {
     preTests.append(e)
