@@ -4,7 +4,7 @@ package maf.cli.experiments.contracts
  * This benchmark suite contains benchmark of the MAF framework,
  * but with contracts annotated in the source code of many functions.
  */
-case class MafBenchmarks() extends Benchmarks {
+case class MafBenchmarks() extends Benchmarks with ModAnalysisBenchmark {
 
   def run(): Unit = {
     val testBenchmarks = List(

@@ -11,6 +11,7 @@ case class Suspended(exp: ScExp, tracker: Tracker)(val k: (ScExp, Tracker) => An
 
 /** A type of analysis that combines concolic testing with the static analyser */
 abstract class ConcolicBridge(exp: ScExp) {
+  var currentExp: Option[ScExp] = None
 
   /** Set of disabled assumptions */
   private var disabled: Set[String] = Set()
@@ -44,6 +45,7 @@ abstract class ConcolicBridge(exp: ScExp) {
     // then we apply any instrumentation that might have been
     // introduced by the modular analysis
     val instrumented = analysis.instrumenter.run(exp)
+    currentExp = Some(instrumented)
 
     if (instrumented != exp) {
       Suspended(instrumented, tracker) { (exp, tracker) =>
@@ -52,6 +54,7 @@ abstract class ConcolicBridge(exp: ScExp) {
         // concolic tester and make it search for potential errors
         val tester = concolicTester(exp)
         val updated = tester.analyzeWithTimeoutInstrumented(timeout)
+        currentExp = Some(updated)
 
         if (updated != exp) {
           Suspended(updated, tracker) { (exp, tracker) => sunspendableAnalyze(exp, timeout, tracker) }

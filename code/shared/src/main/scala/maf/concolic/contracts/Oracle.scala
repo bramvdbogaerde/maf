@@ -21,7 +21,7 @@ object Oracle {
     Value.Symbol(Array.fill(random.nextInt(10))(random.nextPrintableChar()).mkString)
 
   def randomInteger: Value.Integer =
-    Value.Integer(random.nextInt())
+    Value.Integer(random.nextInt(10))
 
   def randomReal: Value.Real =
     Value.Real(random.nextDouble())

@@ -40,8 +40,7 @@ trait ScBigStepSemanticsMonitored extends ScBigStepSemanticsScheme {
       super.analyzeWithTimeout(_ignored_timeout)
     }
 
-    /*
-    override def eval(expr: ScExp): ScEvalM.ScEvalM[PostValue] = expr match {
+    override def eval(expr: ScExp): ScEvalM[PostValue] = expr match {
       case ScFunctionAp(ScIdentifier("safe", _), List(), _, _) =>
         allSafe = true
         if (summary.blames.nonEmpty) {
@@ -60,33 +59,47 @@ trait ScBigStepSemanticsMonitored extends ScBigStepSemanticsScheme {
     }
 
     override def monFlat(
-        contract: (Value, PC),
-        expressionValue: (Value, PC),
+        contract: PostValue,
+        expressionValue: PostValue,
         blamedIdentity: Identity,
-        blamingIdentity: Identity = Identity.none,
-        doBlame: Boolean = true
-      ): ScEvalM.ScEvalM[(Value, PC)] = {
+        blamingIdentity: Identity,
+        doBlame: Boolean,
+        syntacticExpression: Option[ScExp],
+        syntacticOperator: Option[ScExp],
+        domainContract: Option[Int]
+      ): ScEvalM[PostValue] = {
       import maf.util.MapUtil._
 
       contractApplications += 1
       distinctContractApplications = distinctContractApplications.weakPut(blamingIdentity, VerifiedTrue)
 
-      super.monFlat(contract, expressionValue, blamedIdentity)
+      super.monFlat(
+        contract,
+        expressionValue,
+        blamedIdentity,
+        blamingIdentity,
+        doBlame,
+        syntacticExpression,
+        syntacticOperator,
+        domainContract
+      )
     }
 
     override def blame[X](
         blamedIdentity: Identity,
         blamingIdentity: Identity
-      ): ScEvalM.ScEvalM[X] = {
+      ): ScEvalM[X] = {
       import maf.util.MapUtil._
       withIgnoredIdentities(ignored =>
-        if (!ignored.contains(blamedIdentity)) {
-          distinctContractApplications = distinctContractApplications.weakPut(blamingIdentity, VerifiedFalse)
-        }
-      ) >> super.blame(blamedIdentity, blamingIdentity)
+        effectful {
+          if (!ignored.contains(blamedIdentity)) {
+            distinctContractApplications = distinctContractApplications.weakPut(blamingIdentity, VerifiedFalse)
+          }
+        } >>
+          super.blame(blamedIdentity, blamingIdentity)
+      )
     }
 
-     */
   }
 
 }

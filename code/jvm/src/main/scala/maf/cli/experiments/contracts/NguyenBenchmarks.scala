@@ -1,6 +1,6 @@
 package maf.cli.experiments.contracts
 
-case class NguyenBenchmarks() extends Benchmarks {
+case class NguyenBenchmarks() extends ModAnalysisBenchmark {
   def run(): Unit = {
     val testBenchmarks = List(
       fromFile("test/soft-contract/NguyenGTH18/safe/dynamic-tests.rkt"),
