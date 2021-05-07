@@ -9,6 +9,8 @@ import scala.collection.mutable
 import maf.modular.contracts.semantics.Counter
 import maf.modular.contracts.semantics.ScModSemantics
 
+case object AND extends Label
+case object OR extends Label
 case object FLAT_CONTRACT extends Label
 case object HIGHER_ORDER_CONTRACT extends Label
 case object DEPENDENT_CONTRACT extends Label
@@ -772,6 +774,30 @@ case class ScCons(
   override def subexpressions: List[Expression] = List(car, cdr)
 
   override def toString = s"(cons $car $cdr)"
+}
+
+case class ScAnd(expressions: List[ScExp], idn: Identity) extends ScExp {
+
+  override def fv: Set[String] =
+    expressions.map(_.fv).foldLeft(Set[String]())(_ ++ _)
+
+  override def label: Label =
+    AND
+
+  override def subexpressions: List[Expression] =
+    expressions
+}
+
+case class ScOr(expressions: List[ScExp], idn: Identity) extends ScExp {
+
+  override def fv: Set[String] =
+    expressions.map(_.fv).foldLeft(Set[String]())(_ ++ _)
+
+  override def label: Label =
+    OR
+
+  override def subexpressions: List[Expression] =
+    expressions
 }
 
 case class ScCar(pai: ScExp, idn: Identity) extends ScExp {

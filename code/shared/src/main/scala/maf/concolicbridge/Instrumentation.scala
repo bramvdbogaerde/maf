@@ -38,6 +38,14 @@ case class Instrumenter(replacementNodes: Map[Identity, (IdentityGenerator, ScEx
     f(
       new IdentityGenerator(e.idn),
       e match {
+        case ScAnd(expressions, _) =>
+          val instrumentedExpressions = expressions.map(run)
+          ScAnd(instrumentedExpressions, e.idn)
+
+        case ScOr(expressions, _) =>
+          val instrumentedExpressions = expressions.map(run)
+          ScOr(instrumentedExpressions, e.idn)
+
         case ScBegin(expressions, _) =>
           val instrumentedExpressions = expressions.map(run)
           ScBegin(instrumentedExpressions, e.idn)

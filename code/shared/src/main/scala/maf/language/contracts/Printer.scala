@@ -19,6 +19,32 @@ class Printer {
   }
 
   def run(e: ScExp): Unit = e match {
+    case ScAnd(expressions, _) =>
+      printer.print("(and ")
+      if (expressions.nonEmpty) {
+        expressions.init.foreach { expression =>
+          run(expression)
+          printer.print(" ")
+        }
+
+        run(expressions.last)
+      }
+
+      printer.print(")")
+
+    case ScOr(expressions, _) =>
+      printer.print("(or ")
+      if (expressions.nonEmpty) {
+        expressions.init.foreach { expression =>
+          run(expression)
+          printer.print(" ")
+        }
+
+        run(expressions.last)
+      }
+
+      printer.print(")")
+
     case ScBegin(expressions, _) =>
       printer.print("(begin ")
       printer.newIndent()

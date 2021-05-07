@@ -246,6 +246,12 @@ object SCExpCompiler {
     case Ident("begin") :: expressions =>
       ScBegin(compile_sequence(expressions), prog.idn)
 
+    case Ident("and") :: expressions =>
+      ScAnd(compile_sequence(expressions), prog.idn)
+
+    case Ident("or") :: expressions =>
+      ScOr(compile_sequence(expressions), prog.idn)
+
     case Ident("check") :: contract :: expression :: ListNil(_) =>
       val compiledContract = compile(contract)
       val compiledExpression = compile(expression)

@@ -28,7 +28,7 @@ trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
   }
 
   protected def runAnalysis(program: String): Value = {
-    val exp = SCExpCompiler.read(program)
+    val exp = SCExpCompiler.preludedRead(program)
     val analysis = createAnalysis(exp)
     analysis.analyzeOnce()
   }
