@@ -91,6 +91,12 @@ object CollabBenchmark {
         .combine(countConsequent)
         .combine(countAlternative)
 
+    case ScAnd(exprs, _) =>
+      exprs.map(count).foldLeft(Counter())((c1, c2) => c1.combine(c2))
+
+    case ScOr(exprs, _) =>
+      exprs.map(count).foldLeft(Counter())((c1, c2) => c1.combine(c2))
+
     case ScLetRec(_, _, body, _) =>
       count(body)
 
@@ -229,6 +235,7 @@ trait CollabBenchmark extends Benchmarks {
     val allStart = System.nanoTime()
 
     // do it with assumptions
+    analysis.disable("pure")
     loop(true, analysis.sunspendableAnalyze(exp, Timeout.none), System.nanoTime())
 
     // do it without assumptions

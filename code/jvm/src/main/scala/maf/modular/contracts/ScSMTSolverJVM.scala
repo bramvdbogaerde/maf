@@ -283,7 +283,9 @@ class ScSMTSolverJVM[V](
           case "VBool" => Value.Bool(u.getArgs()(0).asInstanceOf[BoolExpr].isTrue())
           case v =>
             println(v)
-            ???
+            // TODO
+            println("Warn: unrecognized value")
+            Value.Nil
         }
       )
 
