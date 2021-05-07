@@ -60,6 +60,14 @@ object ScConcretePrimitives {
 
   }
 
+  object `any?` extends SimplePrim {
+    override val name: String = "any?"
+    override def call(args: List[ConcreteValues.Value], position: Position.Position): ConcreteValues.Value = args match {
+      case _ :: Nil => Value.Bool(true)
+      case _        => throw new Exception(s"Expected 1 arguments got ${args.size}")
+    }
+  }
+
   object `dependent-contract?` extends SimplePrim {
     override val name: String = "dependent-contract?"
 
@@ -200,7 +208,7 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
   import ScConcretePrimitives._
   private def interop = new MonadicSchemeInterpreter(ConcolicStore(Map()))
   private def scPrimitives =
-    List(`true?`, `false?`, `dependent-contract?`, `procedure?`, `equal?`)
+    List(`true?`, `false?`, `dependent-contract?`, `procedure?`, `equal?`, `any?`)
 
   private lazy val allPrimitives =
     (interop.Primitives.allPrimitives.map(_._2) ++ scPrimitives).map(p => (p.name, p)).toMap

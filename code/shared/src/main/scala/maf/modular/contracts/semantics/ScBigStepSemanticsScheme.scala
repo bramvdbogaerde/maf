@@ -221,6 +221,7 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
       evalTestGuard(test)
 
     case ScFunctionAp(ScIdentifier("and", _), operands, _, _) => evalAnd(operands)
+    case ScFunctionAp(ScIdentifier("or", _), operands, _, _)  => evalOr(operands)
     case ScFunctionAp(operator, operands, idn, _)             => evalFunctionAp(operator, operands, idn)
     case v: ScValue                                           => evalValue(v)
     case exp: ScIdentifier                                    => evalIdentifier(exp)
@@ -282,6 +283,16 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
       case expr :: exprs =>
         eval(expr).flatMap { value =>
           cond(value, enrichOpaqueInStore(expr, evalAnd(exprs)), result(lattice.schemeLattice.bool(false)))
+        }
+    }
+
+  def evalOr(operands: List[ScExp]): ScEvalM[PostValue] =
+    operands match {
+      case List(expr) =>
+        eval(expr)
+      case expr :: exprs =>
+        eval(expr).flatMap { value =>
+          cond(value, pure(value), evalOr(exprs))
         }
     }
 

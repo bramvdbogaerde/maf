@@ -1,7 +1,5 @@
 package maf.cli.experiments.contracts
 
-import java.io.File
-
 import maf.language.contracts.{SCExpCompiler, ScExp}
 import maf.modular.contracts.ScJVMAnalysis
 import maf.util.{Reader, Writer}

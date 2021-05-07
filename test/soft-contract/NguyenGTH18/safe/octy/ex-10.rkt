@@ -1,9 +1,9 @@
 (define (f p)
-  (if (int? (car p)) (add1 (car p)) 7))
+  (if (number? (car p)) (add1 (car p)) 7))
 
 (provide/contract
-  (f (-> pair? int?)))
+  (f (-> pair? number?)))
 
-; (provide/contract [f (cons? . -> . int?)])
+; (provide/contract [f (cons? . -> . number?)])
 (@unchecked f OPQ)
 (safe)

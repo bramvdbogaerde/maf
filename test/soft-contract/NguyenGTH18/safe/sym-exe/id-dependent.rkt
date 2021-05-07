@@ -3,7 +3,7 @@
 (define (f x) x)
 
 (provide/contract
-  (f (~ int? (lambda (x) (=/c x)))))
+  (f (~ number? (lambda (x) (=/c x)))))
 
 ;(provide/contract [f (->i ([x real?]) (res (x) (=/c x)))])
 (@unchecked f OPQ)

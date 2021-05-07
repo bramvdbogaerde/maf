@@ -8,7 +8,7 @@
       (factorial-acc (sub1 n) (* n acc))))
 
 (provide/contract
- (factorial (-> int? int?)))
+ (factorial (-> number? number?)))
 
 (@unchecked factorial OPQ)
 (safe)

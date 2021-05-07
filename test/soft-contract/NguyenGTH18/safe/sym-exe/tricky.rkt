@@ -3,7 +3,7 @@
       (if (zero? (f (sub1 x))) 7 8)))
 
 (provide/contract 
-  (f (-> int?  int?)))
+  (f (-> number?  number?)))
 
 (@unchecked f OPQ)
 (safe)

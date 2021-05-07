@@ -2,7 +2,7 @@
   (if (zero? n) 1 (* n (factorial (sub1 n)))))
 
 (provide/contract
- (factorial (-> int? int?)))
+ (factorial (-> number? number?)))
 
 (@unchecked factorial OPQ)
 (safe)

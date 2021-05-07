@@ -113,7 +113,10 @@ trait ScModAnalysisSemanticsMonad extends ScAbstractSemanticsMonadAnalysis {
    * Returns a computation that applies the given function on the current store cache
    * and expects a tuple of a value and a new store cache
    */
-  override def withStoreCacheExplicit[X](f: StoreCache => (X, StoreCache)): ScEvalM[X] = ???
+  override def withStoreCacheExplicit[X](f: StoreCache => (X, StoreCache)): ScEvalM[X] = AnalysisMonad { context =>
+    val (v, m) = f(context.cache)
+    Set((context.copy(cache = m), v))
+  }
 
   override def joinInCache(addr: Addr, value: PostValue): ScEvalM[()] = AnalysisMonad { (context) =>
     val valueInStore: PostValue = context.cache.lookup(addr).getOrElse(new PS((lattice.bottom, ScNil())))

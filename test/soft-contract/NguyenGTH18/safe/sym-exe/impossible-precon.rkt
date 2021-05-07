@@ -6,7 +6,7 @@
 (define (f x) 5)
 
 (provide/contract
-  (f (-> (and/c int? string?) string?)))
+  (f (-> (and/c number? string?) string?)))
 
 (@unchecked f OPQ)
 (safe)

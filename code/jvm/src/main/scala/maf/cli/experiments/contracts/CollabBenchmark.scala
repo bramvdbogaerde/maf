@@ -7,6 +7,8 @@ import maf.concolicbridge.Suspended
 import maf.concolicbridge.AnalysisState
 import maf.concolicbridge.Finished
 import maf.util.benchmarks.Timeout
+import maf.util.benchmarks.Table
+import maf.util.Writer
 
 case class CollabBenchmarkResult(
     benchmarkName: String,
@@ -30,7 +32,23 @@ case class CollabBenchmarkResult(
      * The number of assumptions that could be verified or were used
      *  as being verified
      */
-    verifiedAssumptions: Int)
+    verifiedAssumptions: Int) {
+  def addToTable(inTable: Table[String]): Table[String] = {
+    var outTable = inTable
+    outTable = outTable.add(this.benchmarkName, "elapsedTime", elapsedTime.toString)
+    outTable = outTable.add(this.benchmarkName, "analyzedComponents", analysedComponents.toString)
+    outTable = outTable.add(this.benchmarkName, "verifiedContracts", verifiedContracts.toString)
+    outTable = outTable.add(this.benchmarkName, "distinctContracts", distinctContracts.toString)
+    outTable = outTable.add(this.benchmarkName, "collabIterations", collabIterations.toString)
+    outTable = outTable.add(this.benchmarkName, "elapsedAnalysisTimes", elapsedAnalysisTimes.mkString(":"))
+    outTable = outTable.add(this.benchmarkName, "elapsedConcolicTimes", elapsedConcolicTimes.mkString(":"))
+    outTable = outTable.add(this.benchmarkName, "numberOfAssumptions", numberOfAssumptions.toString)
+    outTable = outTable.add(this.benchmarkName, "verifiedContractsOverTime", verifiedContractsOverTime.mkString(":"))
+    outTable = outTable.add(this.benchmarkName, "violatedAssumptions", violatedAssumptions.toString)
+
+    outTable
+  }
+}
 
 object CollabBenchmark {
   import maf.language.contracts._
@@ -169,7 +187,19 @@ trait CollabBenchmark extends Benchmarks {
     new CollaborativeAnalysisJVM(exp)
   }
 
+  def testBenchmarks: List[Benchmark]
+
+  def runAll(out: String): Unit = {
+    val results = testBenchmarks.map(runBenchmark)
+    val finalTable = results.foldRight(Table.empty[String])(_.addToTable(_))
+    val writer = Writer.open(s"$out.csv")
+
+    writer.write(finalTable.toCSVString())
+    writer.close()
+  }
+
   def runBenchmark(benchmark: Benchmark): CollabBenchmarkResult = {
+    println(s"Running benchmark $benchmark")
     val source = Reader.loadFile(benchmark)
     val exp = SCExpCompiler.preludedRead(source)
     val analysis = createAnalysis(source)

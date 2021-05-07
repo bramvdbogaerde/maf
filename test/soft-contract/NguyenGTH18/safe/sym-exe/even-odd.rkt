@@ -12,8 +12,8 @@
 
 
 (provide/contract
- (meven? (-> int?  bool?))
- (modd? (-> int? bool?)))
+ (meven? (-> number?  bool?))
+ (modd? (-> number? bool?)))
 
 (@unchecked meven? OPQ)
 (@unchecked modd? OPQ)

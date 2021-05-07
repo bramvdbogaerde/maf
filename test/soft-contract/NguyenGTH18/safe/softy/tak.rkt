@@ -8,7 +8,7 @@
       z))
 
 (provide/contract
- (tak (-> int? int? int? int?)))
+ (tak (-> number? number? number? number?)))
 
 (@unchecked tak OPQ OPQ OPQ)
 (safe)

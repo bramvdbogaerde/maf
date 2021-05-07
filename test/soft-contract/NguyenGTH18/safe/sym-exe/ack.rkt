@@ -6,6 +6,6 @@
    ((= n 0) (ack (- m 1) 1))
    (else (ack (- m 1) (ack m (- n 1))))))
 
-(provide/contract (ack (-> int? int? int?)))
+(provide/contract (ack (-> number? number? number?)))
 (@unchecked ack OPQ OPQ)
 (safe)

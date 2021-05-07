@@ -4,7 +4,7 @@
   (= (g 5) (g 5)))
 
 (provide/contract
-    (f (-> (-> int? int?) (lambda (x) x))))
+    (f (-> (-> number? number?) (lambda (x) x))))
 
 (@unchecked f OPQ)
 (safe)
