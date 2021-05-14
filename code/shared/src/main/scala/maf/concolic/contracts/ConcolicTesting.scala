@@ -161,7 +161,13 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
         cdr: PS,
         carIdn: Identity,
         cdrIdn: Identity
-      ): ScEvalM[PS] = ???
+      ): ScEvalM[PS] = for {
+      carAddr <- pure(alloc(carIdn))
+      cdrAddr <- pure(alloc(cdrIdn))
+      _ <- write(carAddr, car)
+      _ <- write(cdrAddr, cdr)
+      v <- result(ConcreteValues.Value.Cons(ConcreteValues.Value.Pointer(carAddr), ConcreteValues.Value.Pointer(cdrAddr)))
+    } yield v
 
     override def allocVar(id: ScIdentifier): ScConcreteValues.ScAddr =
       (addr, VarAddr(Identifier(id.name, id.idn)))
