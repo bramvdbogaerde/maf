@@ -522,7 +522,13 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
         cdrAddr = ScCdrAddr(carAddr)
         _ <- write(carAddr, v)
         _ <- write(allocator.view(cdrAddr), cdr)
-      } yield ??? // TODO: use SchemeCons value(lattice.injectCons(Cons(carAddr, cdrAddr)))
+        value <- result(
+          lattice.schemeLattice.cons(
+            lattice.schemeLattice.pointer(carAddr),
+            lattice.schemeLattice.pointer(allocator.view(cdrAddr))
+          )
+        )
+      } yield value
   }
 
   var counter = 0
@@ -854,7 +860,18 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
           cdr: PS,
           carIdn: Identity,
           cdrIdn: Identity
-        ): ScEvalM[PS] = ???
+        ): ScEvalM[PS] = for {
+        carAddr <- pure(alloc(carIdn))
+        cdrAddr <- pure(alloc(cdrIdn))
+        _ <- write(carAddr, car)
+        _ <- write(cdrAddr, cdr)
+        value <- result(
+          lattice.schemeLattice.cons(
+            lattice.schemeLattice.pointer(carAddr),
+            lattice.schemeLattice.pointer(cdrAddr)
+          )
+        )
+      } yield value
 
       /** Allocates an address for a variable */
       override def allocVar(id: ScIdentifier): Addr =
