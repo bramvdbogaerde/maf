@@ -2,12 +2,9 @@ package maf.concolicbridge.assumptions
 
 import maf.core.Identity
 import maf.language.contracts.ScExp
-import maf.language.contracts.ScBegin
 import maf.modular.contracts.semantics.ScModSemantics
 import maf.language.contracts.{ScFunctionAp, ScIdentifier, ScValue}
-import maf.language.contracts.ScTest
 import maf.language.contracts.AssumptionBuilder
-import maf.language.contracts.ScAssumed
 
 /**
  * An assumption that withholds a blame if proven to be safe by the concolic tester.
@@ -29,46 +26,48 @@ trait NonBlameAssumption extends AnalysisWithAssumptions with HoldsAssumptionAna
         blamingIdentity: Identity,
         syntacticOperator: Option[ScExp],
         domainContract: Option[Int]
-      ): ScEvalM[PostValue] = {
-      withPc { pc =>
+      ): ScEvalM[PostValue] = for {
+      checked <- withPc { pc =>
         val t = feasible(primTrue, value)(pc)
         val f = feasible(primFalse, value)(pc)
         t.isRight && f.isRight
-      } >>= { checked =>
-        if (domainContract.isDefined && checked && !tracker.contains("nonblame", blamedIdentity) && Assumption.enabled("nonblame")) {
-          tracker.add("nonblame", blamedIdentity)
-          // if it cannot be determined whether the contract is valid or not, then we try to assume it is
-          effectful {
-            withInstrumenter { instrumenter =>
-              instrumenter.replaceAt(
-                blamedIdentity,
-                (gen, exp) => {
-                  val builder = new AssumptionBuilder(gen)
-                  val contract = ScFunctionAp.primitive(
-                    "domain-contract",
-                    List(syntacticOperator.get, ScValue.num(domainContract.get, gen.nextIdentity)),
-                    gen.nextIdentity
-                  )
-                  val localVarName = ScModSemantics.genSym
-                  builder.localVar(localVarName, exp)
-                  builder.addPreTest(ScFunctionAp(contract, List(builder.getLocalVar(localVarName)), gen.nextIdentity))
-                  builder.body(
-                    builder.guarded(HoldsAssumption.applyTo(builder.getLocalVar(localVarName))(gen), List(), builder.getLocalVar(localVarName))
-                  )
-
-                  val finalExp = builder.build
-                  tracker.add("nonblame", finalExp.idn)
-                  finalExp
-                }
-              )
-            }
-          } >> conditional
-        } else {
-          // traditional case
-          conditional
-        }
       }
-    }
 
+      isIgnored <- withIgnoredIdentities { idn => pure(idn.contains(blamedIdentity)) }
+      value <-
+        (if (!isIgnored && domainContract.isDefined && checked && !tracker.contains("nonblame", blamedIdentity) && Assumption.enabled("nonblame")) {
+           tracker.add("nonblame", blamedIdentity)
+           // if it cannot be determined whether the contract is valid or not, then we try to assume it is
+           effectful {
+             withInstrumenter { instrumenter =>
+               instrumenter.replaceAt(
+                 blamedIdentity,
+                 (gen, exp) => {
+                   val builder = new AssumptionBuilder(gen)
+                   val contract = ScFunctionAp.primitive(
+                     "domain-contract",
+                     List(syntacticOperator.get, ScValue.num(domainContract.get, gen.nextIdentity)),
+                     gen.nextIdentity
+                   )
+                   val localVarName = ScModSemantics.genSym
+                   builder.localVar(localVarName, exp)
+                   builder.addPreTest(ScFunctionAp(contract, List(builder.getLocalVar(localVarName)), gen.nextIdentity))
+                   builder.body(
+                     builder.guarded(HoldsAssumption.applyTo(builder.getLocalVar(localVarName))(gen), List(), builder.getLocalVar(localVarName))
+                   )
+
+                   val finalExp = builder.build
+                   tracker.add("nonblame", finalExp.idn)
+                   finalExp
+                 }
+               )
+             }
+           } >> conditional
+         } else {
+           // traditional case
+           conditional
+         })
+    } yield value
   }
+
 }

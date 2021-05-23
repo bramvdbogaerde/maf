@@ -73,9 +73,9 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
        * to carry information about the fact that it is a number.
        */
       private def arithOp(operation: SchemeOp)(left: V, right: V): MayFail[V, maf.core.Error] = (left.right, right.right) match {
-        case (`rightBottom`, _) if left.left.contains(Values.isArithmeticOperand) =>
+        case (_, _) if left.left.contains(Values.isArithmeticOperand) =>
           op(operation)(List(Product2.injectRight(rightLattice.numTop), right))
-        case (_, `rightBottom`) if right.left.contains(Values.isArithmeticOperand) =>
+        case (_, _) if right.left.contains(Values.isArithmeticOperand) =>
           op(operation)(List(left, Product2.injectRight(rightLattice.numTop)))
         case _ =>
           super.op(operation)(List(left, right))
@@ -95,7 +95,7 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
         import SchemeOp._
         operation.checkArity(args)
         operation match {
-          case Plus | Minus | Times | Quotient | Div | Lt =>
+          case Plus | Minus | Times | Quotient | Div | Lt | NumEq =>
             arithOp(operation)(args(0), args(1))
 
           case IsInteger =>
@@ -221,7 +221,7 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
         .toSet
 
     def getSymbolic(value: V): Option[String] =
-      modularLattice.schemeLattice.getPrimitives(value.right).headOption
+      schemeLattice.getPrimitives(value).headOption
 
     def getPrimitives(value: V): Set[SchemePrimitive[V, A]] =
       schemeLattice.getPrimitives(value).flatMap(primMap.get(_))

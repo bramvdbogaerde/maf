@@ -135,7 +135,7 @@ object Product2SchemeLattice {
 
     override def getPrimitives(x: Product2[L, R]): Set[String] = x match {
       case p: Product2Primitive[L, R] => p.prim
-      case _                          => Set()
+      case _                          => rightLattice.getPrimitives(x.right)
     }
 
     override def getContinuations(x: Product2[L, R]): Set[Any] = x match {

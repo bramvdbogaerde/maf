@@ -809,8 +809,10 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
       refined(name, value)
 
     // if the operator is a primitive, then we can fetch its name from its value
-    case _ if lattice.isDefinitelyOpq(value.pure) => lattice.getSymbolic(operator.pure).map(refined(_, value)).getOrElse(value)
-    case _                                        => value
+    case _ if lattice.isDefinitelyOpq(value.pure) =>
+      lattice.getSymbolic(operator.pure).map(refined(_, value)).getOrElse(value)
+
+    case _ => value
   }
 
   def isPredicateOnVariable(expr: ScExp): Option[(String, String)] = expr match {
