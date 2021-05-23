@@ -323,6 +323,7 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
               evaluatedContract <- eval(contract)
               annotatedFn <- applyMon(evaluatedContract, value, contract.idn, variable.idn)
               _ <- writeForce(addr, annotatedFn)
+              value <- read(addr)
             } yield annotatedFn
       } yield annotatedFn
     })
@@ -572,6 +573,7 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
           }
         }
 
+        domains <- sequence(contract.domain.map(read))
         values <- sequence {
           contract.domain.map(read).zip(operands.zip(syntacticOperands.zip(LazyList.from(0)))).map { case (domain, (value, (syn, n))) =>
             domain.flatMap(d => applyMon(d, value, arr.contract.idn, syn.idn, Some(syntacticOperator), Some(n)))
@@ -1055,6 +1057,13 @@ trait ScBigStepSemanticsScheme extends ScModSemanticsScheme with ScSchemePrimiti
         _ <- effectful(if (GLOBAL_STORE_ENABLED) writeAddr(addr, value._1))
         _ <- writeLocal(addr, value)
       } yield ()
+
+    override def readSafe(addr: Addr): ScEvalM[PostValue] = withStoreCache { store =>
+      store.get(addr) match {
+        case Some(value) => pure(value)
+        case None        => pure((readAddr(addr), ScNil()))
+      }
+    }
 
     override def read(addr: Addr): ScEvalM[PostValue] = withStoreCache { cache =>
       cache.lookup(addr).map(v => pure(v)).getOrElse(result(readAddr(addr)))

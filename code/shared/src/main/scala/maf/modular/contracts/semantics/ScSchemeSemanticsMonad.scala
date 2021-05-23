@@ -149,10 +149,6 @@ trait ScModAnalysisSemanticsMonad extends ScAbstractSemanticsMonadAnalysis {
     Set((context.copy(cache = context.cache.removedAll(addresses)), ()))
   }
 
-  override def readSafe(addr: Addr): ScEvalM[PostValue] = withStoreCache { store =>
-    pure(store.get(addr).getOrElse((lattice.bottom, ScNil())))
-  }
-
   def compute(c: ScEvalM[PostValue])(context: Context): (Val, Map[Addr, Val], List[ScExp]) = {
     type Store = Map[Addr, Val]
     import maf.lattice.MapLattice._
