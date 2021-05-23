@@ -26,12 +26,10 @@ class Tracker(var assumptions: Map[String, List[Identity]] = Map()) {
    * @param assumption the assumption to track (e.g, pure, value, ...)
    * @param identity the identity of the value for which we generated the assumption
    */
-  def add(assumption: String, identity: Identity): Unit = {
+  def add(assumption: String, identity: Identity): Unit =
     assumptions = assumptions.updatedWith(assumption) { values =>
       values.orElse(Some(List())).map(identity :: _)
     }
-    println(s"tracking assumptions ${assumptions}")
-  }
 
   /** Checks whether we track an assumption for the given identity */
   def contains(assumption: String, identity: Identity): Boolean =
