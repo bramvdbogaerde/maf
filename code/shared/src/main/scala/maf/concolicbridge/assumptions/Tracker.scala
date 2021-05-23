@@ -26,10 +26,12 @@ class Tracker(var assumptions: Map[String, List[Identity]] = Map()) {
    * @param assumption the assumption to track (e.g, pure, value, ...)
    * @param identity the identity of the value for which we generated the assumption
    */
-  def add(assumption: String, identity: Identity): Unit =
+  def add(assumption: String, identity: Identity): Unit = {
     assumptions = assumptions.updatedWith(assumption) { values =>
       values.orElse(Some(List())).map(identity :: _)
     }
+    println(s"tracking assumptions ${assumptions}")
+  }
 
   /** Checks whether we track an assumption for the given identity */
   def contains(assumption: String, identity: Identity): Boolean =
@@ -56,7 +58,7 @@ object Tracker {
    * Useful for generating unique names for the assumptions.
    * It consists of a counter based on the number of made assumptions, and an inner counter based on the number of symbols generated for a single assumption.
    */
-  class TrackerCounter(tracker: Tracker) extends Counter {
+  class TrackerCounter(var tracker: Tracker) extends Counter {
     private var innerCounter = 0
     private var lastAssumptionCounter = tracker.assumptions.size
 

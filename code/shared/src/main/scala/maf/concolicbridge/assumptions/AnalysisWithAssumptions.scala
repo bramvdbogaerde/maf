@@ -10,16 +10,22 @@ import maf.language.contracts.ScNil
 import maf.modular.contracts.semantics.Counter
 import maf.concolicbridge.IdentityGenerator
 import maf.language.contracts.ScAssumed
-import maf.modular.contracts.semantics.ScModSemantics
 import maf.language.contracts.ScLattice.GuardUnverified
 import maf.language.contracts.ScLattice.GuardViolated
 import maf.language.contracts.ScLattice.GuardVerified
+import maf.concolicbridge.assumptions.Tracker.TrackerCounter
 
 trait AnalysisWithAssumptions extends ScBigStepSemanticsScheme with ScModSemanticsCollaborativeTesting { outer =>
   override def intraAnalysis(component: Component): AnalysisWithAssumptionsIntra
 
+  implicit val symCounter: Counter = new Tracker.TrackerCounter(_tracker)
+
+  override def tracker_=(tracker: Tracker): Unit = {
+    super.tracker_=(tracker)
+    symCounter.asInstanceOf[TrackerCounter].tracker = tracker
+  }
+
   trait AnalysisWithAssumptionsIntra extends ScIntraAnalysisInstrumented with IntraScBigStepSemantics {
-    implicit val symCounter: Counter = new Tracker.TrackerCounter(tracker)
 
     trait Assumption {
 
