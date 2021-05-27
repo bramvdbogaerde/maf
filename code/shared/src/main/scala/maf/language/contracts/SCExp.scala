@@ -284,6 +284,9 @@ case class ScFunctionAp(
 }
 
 object ScFunctionAp {
+  def isTrue(p: ScFunctionAp, idn: Identity = Identity.none): ScFunctionAp =
+    ScFunctionAp.primitive("true?", List(p), idn)
+
   def primitive(
       name: String,
       arguments: List[ScExp],

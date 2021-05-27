@@ -54,16 +54,24 @@ class ScSMTSolverJVM[V](
   (declare-fun char/c (V) V)
 
   (define-fun >/c ((v1 V) (v2 V)) V
-     (VBool (> (unwrap-int v1) (unwrap-int v2))))
+     (ite (and (is-VInt v1) (is-VInt v2)) 
+          (VBool (> (unwrap-int v1) (unwrap-int v2)))
+          VTypeErr))
      
   (define-fun </c ((v1 V) (v2 V)) V
-     (VBool (< (unwrap-int v1) (unwrap-int v2))))
+     (ite (and (is-VInt v1) (is-VInt v2)) 
+          (VBool (< (unwrap-int v1) (unwrap-int v2)))
+          VTypeErr))
 
   (define-fun =/c ((v1 V) (v2 V)) V
-     (VBool (= (unwrap-int v1) (unwrap-int v2))))
+     (ite (and (is-VInt v1) (is-VInt v2)) 
+          (VBool (= (unwrap-int v1) (unwrap-int v2)))
+          VTypeErr))
      
   (define-fun string=?/c ((v1 V) (v2 V)) V
-     (VBool (= (unwrap-string v1) (unwrap-string v2))))
+     (ite (and (is-VString v1) (is-VString v2)) 
+          (VBool (= (unwrap-string v1) (unwrap-string v2)))
+          VTypeErr))
      
   (define-fun int?/c ((v1 V)) V
      (VBool ((_ is VInt) v1)))
@@ -82,7 +90,9 @@ class ScSMTSolverJVM[V](
      (VBool ((_ is VNil) v1)))
 
    (define-fun nonzero?/c ((v1 V)) V
-     (VBool (not (= (unwrap-int v1) 0))))
+     (ite (is-VInt v1)
+          (VBool (not (= (unwrap-int v1) 0)))
+          VTypeErr))
 
    ;; everything is true except false
    (define-fun true?/c ((v1 V)) Bool
@@ -90,9 +100,13 @@ class ScSMTSolverJVM[V](
          ((_ is VProc) v1)
          ((_ is VPrim) v1)
          ((_ is VString) v1)
-         (and ((_ is VBool) v1)
+         (and (not ((_ is VTypeErr) v1))
+              ((_ is VBool) v1)
               (unwrap-bool v1))))
 
+  ;; same as int? and real?
+   (define-fun number?/c ((v1 V)) V
+     (VBool ((_ is VInt) v1)))
 
     (define-fun equal?/c ((v1 V) (v2 V)) V 
       (ite (and (is-VInt v1) (is-VInt v2))
@@ -109,7 +123,9 @@ class ScSMTSolverJVM[V](
                         
     ;; only false is false
     (define-fun false?/c ((v1 V)) Bool
-      (not (unwrap-bool v1)))
+      (ite (is-VBool v1)
+           (not (unwrap-bool v1))
+           ((_ is VTypeErr) v1)))
       
    (define-fun pair?/c ((v1 V)) V
      (VBool ((_ is VPai) v1)))
@@ -163,7 +179,8 @@ class ScSMTSolverJVM[V](
         context.mkConstructor("VPai", "is-VPai", Array("car", "cdr"), Array(null, null), Array(0, 0)),
         context.mkConstructor("VNil", "is-VNil", Array[String](), Array(), null),
         context.mkConstructor("VString", "is-VString", Array("unwrap-string"), Array(context.getStringSort()), null),
-        context.mkConstructor("VPrim", "is-VPrim", Array("unwrap-prim"), Array(context.getStringSort()), null)
+        context.mkConstructor("VPrim", "is-VPrim", Array("unwrap-prim"), Array(context.getStringSort()), null),
+        context.mkConstructor("VTypeErr", "is-VTypeErr", Array[String](), Array[Sort](), null)
       )
     )
   }
@@ -282,9 +299,11 @@ class ScSMTSolverJVM[V](
           case "VInt"  => Value.Integer(u.getArgs()(0).asInstanceOf[IntNum].getInt())
           case "VBool" => Value.Bool(u.getArgs()(0).asInstanceOf[BoolExpr].isTrue())
           case v =>
-            println(v)
-            // TODO
-            println("Warn: unrecognized value")
+            if (ScSettings.DEBUG_SMT) {
+              println(v)
+              // TODO
+              println("Warn: unrecognized value")
+            }
             Value.Nil
         }
       )
