@@ -50,8 +50,8 @@ trait ScBigStepSemanticsMonitored extends ScBigStepSemanticsScheme {
         }
         pure(value(lattice.schemeLattice.nil))
 
-      case ScFunctionAp(_, args, _, annotation) if annotation == Some("@unchecked") =>
-        addIgnored(args.map(_.idn)) >>
+      case ScFunctionAp(op, args, idn, annotation) if annotation == Some("@unchecked") =>
+        addIgnored(List(op.idn, idn) ++ args.map(_.idn)) >>
           super
             .eval(expr)
 

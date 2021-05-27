@@ -99,6 +99,11 @@ trait ScAbstractValues[A <: Address] {
       case _ => false
     }
 
+    def isOpq(value: ValueExt): Boolean = value match {
+      case Opqs(_) => true
+      case _       => false
+    }
+
     def isArithmeticOperand(value: ValueExt): Boolean =
       isRefinedOpq(value, Set("integer?", "real?", "number?"))
 

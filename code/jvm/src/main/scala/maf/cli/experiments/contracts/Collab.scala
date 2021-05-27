@@ -2,7 +2,7 @@ package maf.cli.experiments.contracts;
 
 object Collab extends Benchmarks with CollabBenchmark {
   override val testBenchmarks: List[Benchmark] = List(
-    fromFile("test/soft-contract/NguyenGTH18/safe/dynamic-tests.rkt"),
+    //fromFile("test/soft-contract/NguyenGTH18/safe/dynamic-tests.rkt"),
     fromFile("test/soft-contract/NguyenGTH18/safe/sym-exe/ack.rkt"),
     fromFile("test/soft-contract/NguyenGTH18/safe/sym-exe/even-odd.rkt"),
     fromFile("test/soft-contract/NguyenGTH18/safe/sym-exe/factorial-acc.rkt"),

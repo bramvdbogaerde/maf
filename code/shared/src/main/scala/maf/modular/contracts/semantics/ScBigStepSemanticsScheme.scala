@@ -697,7 +697,7 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
           cond(
             value,
             pure(enrich(contract, expressionValue)),
-            if (doBlame) blame(blamedIdentity, blamingIdentity) else void
+            if (doBlame) debug { println(s"blaming $contract on $expressionValue got $value") } >> blame(blamedIdentity, blamingIdentity) else void
           ),
           blamedIdentity,
           blamingIdentity,

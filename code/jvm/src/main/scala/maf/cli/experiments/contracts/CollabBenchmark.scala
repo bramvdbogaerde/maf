@@ -223,6 +223,7 @@ trait CollabBenchmark extends Benchmarks {
         if (static) {
           analysisTimes = elapsedTime :: analysisTimes
           verifiedOverTime = verifiedOverTime ++ List(analysis.currentAnalysis.get.verifiedContracts)
+          println("Static analysis iter finished")
         } else {
           concolicTimes = elapsedTime :: concolicTimes
         }

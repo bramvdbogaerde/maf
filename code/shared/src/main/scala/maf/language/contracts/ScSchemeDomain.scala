@@ -54,6 +54,14 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
 
   implicit lazy val leftLattice: SchemeLattice[L, A] = new EmptyDomainSchemeLattice[L, A] {
     val lattice = valueExtProductLattice
+
+    // everything in the contract domain of sclang is true except bottom
+    override def isTrue(x: L): Boolean = {
+      lattice.bottom != x
+    }
+
+    // everything is false except an opaque value which is anologous to top
+    override def isFalse(x: L): Boolean = if (x.contains(Values.isOpq)) true else false
   }
 
   implicit lazy val rightLattice = modularLattice.schemeLattice
@@ -101,7 +109,29 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
           case IsInteger =>
             mayFailJoin(
               rightLattice.op(IsInteger)(args.map(_.right)).map(v => Product2.injectRight(v)),
-              MayFail.success(schemeLattice.bool(args(0).left.contains(v => Values.isRefinedOpq(v, Set("number?", "integer?", "int?")))))
+              MayFail.success(
+                if (args(0).left.contains(v => Values.isRefinedOpq(v, Set("number?", "integer?", "int?")))) {
+                  schemeLattice.bool(true)
+                } else if (args(0).left.contains(Values.isOpq)) {
+                  schemeLattice.boolTop
+                } else {
+                  schemeLattice.bottom
+                }
+              )
+            )
+
+          case IsReal =>
+            mayFailJoin(
+              rightLattice.op(IsReal)(args.map(_.right)).map(v => Product2.injectRight(v)),
+              MayFail.success(
+                if (args(0).left.contains(v => Values.isRefinedOpq(v, Set("real?")))) {
+                  schemeLattice.bool(true)
+                } else if (args(0).left.contains(Values.isOpq)) {
+                  schemeLattice.boolTop
+                } else {
+                  schemeLattice.bottom
+                }
+              )
             )
 
           // Computations on leftLattice values that return values from the Product2lattice
@@ -303,16 +333,18 @@ trait ScSchemeDomain[A <: Address] extends ScAbstractValues[A] { outer =>
           MayFail.success(schemeLattice.bool(schemeLattice.isFalse(args(0))))
 
         case ScOp.IsNumber =>
-          mayFailJoin(
-            List(
-              MayFail.success(
-                schemeLattice.bool(
-                  List(schemeLattice.op(IsInteger)(args), schemeLattice.op(IsReal)(args))
-                    .foldLeft(false)((a, b) => b.map(v => a || schemeLattice.isTrue(v)).getOrElse(false))
-                )
-              ),
-              MayFail.success(isRefinedTo(args(0), Set("integer?", "real?", "number?")))
-            )
+          MayFail.success(
+            List(schemeLattice.op(IsInteger)(args), schemeLattice.op(IsReal)(args))
+              .foldLeft(schemeLattice.bottom)((a, b) =>
+                if (schemeLattice.isTrue(a) && !schemeLattice.isFalse(a)) {
+                  a
+                } else if (schemeLattice.isTrue(b.getOrElse(schemeLattice.bottom)) && !schemeLattice.isFalse(b.getOrElse(schemeLattice.bottom))) {
+                  b.getOrElse(a)
+                } else {
+                  val v = schemeLattice.join(a, b.map(v => v).getOrElse(schemeLattice.bottom))
+                  v
+                }
+              )
           )
 
         case ScOp.IsAny =>
