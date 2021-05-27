@@ -319,8 +319,18 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
         value <- read(addr)
         // FIXME: this is possibly unsound. It serves as a hack to fix issues with flow insensitivity  and writeForce
         annotatedFn <-
-          if (lattice.isDefinitelyArrow(value.pure)) pure(value)
-          else
+          if (lattice.isDefinitelyArrow(value.pure)) {
+            // if the function is already wrapped, unwrap it first
+            nondets(lattice.getArr(value.pure).map { arr =>
+              for {
+                functionValue <- read(arr.e)
+                evaluatedContract <- eval(contract)
+                annotatedFn <- applyMon(evaluatedContract, functionValue, contract.idn, variable.idn)
+                _ <- writeForce(addr, annotatedFn)
+                value <- read(addr)
+              } yield annotatedFn
+            })
+          } else
             for {
               evaluatedContract <- eval(contract)
               annotatedFn <- applyMon(evaluatedContract, value, contract.idn, variable.idn)
@@ -504,8 +514,10 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
     ): ScEvalM[PostValue] = for {
     evaluatedOperator <- eval(operator)
     evaluatedOperands <- sequence(operands.map(eval))
+    _ <- debug { println(s"Applying $evaluatedOperator to $evaluatedOperands") }
     _ <- evalFunctionApHook(evaluatedOperator, evaluatedOperands, operator, operands, idn)
     res <- applyFn(evaluatedOperator, evaluatedOperands, operator, operands)
+    _ <- debug { println(s"Result after applying $evaluatedOperator is $res") }
   } yield res
 
   def evalIf(
@@ -576,6 +588,7 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
         }
 
         domains <- sequence(contract.domain.map(read))
+        _ <- debug { println(s"domains of $arr are $domains") }
         values <- sequence {
           contract.domain.map(read).zip(operands.zip(syntacticOperands.zip(LazyList.from(0)))).map { case (domain, (value, (syn, n))) =>
             domain.flatMap(d => applyMon(d, value, arr.contract.idn, syn.idn, Some(syntacticOperator), Some(n)))
