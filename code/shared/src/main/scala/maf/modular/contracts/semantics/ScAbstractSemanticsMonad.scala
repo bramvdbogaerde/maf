@@ -8,6 +8,7 @@ import maf.language.contracts.ScExp
 import maf.core.Environment
 import maf.core.BasicEnvironment
 import maf.language.contracts.ScNil
+import maf.ScSettings
 
 case class AddrNotFound[A](addr: A) extends Exception {
   override def getMessage(): String =
@@ -166,8 +167,10 @@ trait ScAbstractSemanticsMonadAnalysis {
    *  explicitly states that it is for debugging reasons
    */
   def debug(c: => ()): ScEvalM[()] = unit.flatMap { _ =>
-    println("***debug***")
-    c
+    if (ScSettings.DEBUG_STATIC || ScSettings.DEBUG_STATIC) {
+      println("***debug***")
+      c
+    }
     pure(())
   }
 
