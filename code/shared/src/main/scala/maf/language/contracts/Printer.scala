@@ -275,6 +275,9 @@ class Printer {
       run(pai)
       printer.print(")")
 
+    case ScVarArgIdentifier(x, _) =>
+      printer.print(x)
+
     case ScNil(idn) => printer.print("'()")
   }
 }
