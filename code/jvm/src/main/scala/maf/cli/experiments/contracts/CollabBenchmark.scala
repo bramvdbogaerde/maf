@@ -198,7 +198,7 @@ trait CollabBenchmark extends Benchmarks {
   def runAll(out: String): Unit = {
     val results = testBenchmarks.map(runBenchmark)
     val finalTable = results.foldRight(Table.empty[String])(_.addToTable(_))
-    val writer = Writer.open(s"$out.csv")
+    val writer = Writer.open(s"results/$out.csv")
 
     writer.write(finalTable.toCSVString())
     writer.close()

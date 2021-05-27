@@ -2,15 +2,13 @@ package maf.cli.runnables
 
 import maf.language.contracts.ScExp
 import maf.language.scheme.interpreter.ConcreteValues
+import maf.concolic.ConcolicTestingJVM
 
 object ConcolicTesting {
   object Evaluator extends TinyRepl.Evaluator {
 
     override def eval(sc: ScExp): Any = {
-      val analysis = new maf.concolic.contracts.ConcolicTesting(sc) {
-
-        def isSat(exp: ScExp): Option[Map[String, Val]] = ???
-      }
+      val analysis = new ConcolicTestingJVM(sc)
 
       analysis.analyze()
       analysis.results
