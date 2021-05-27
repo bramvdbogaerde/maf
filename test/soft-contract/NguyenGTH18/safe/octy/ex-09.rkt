@@ -15,6 +15,6 @@
  (f (-> (or/c string? number?) number?))
  (g (-> any?  number?)))
 
-(@unchecked f OPQ OPQ)
+(@unchecked f OPQ)
 (@unchecked g OPQ)
 (safe)
