@@ -89,9 +89,8 @@ object ScPrelude {
     //"min" -> "(define (min a b) (if (< a b) a b))", // Variadic => implemented manually.
     "negative?" -> "(define/contract (negative? x) (~> number? bool?) (< x 0))",
     "newline" -> "(define (newline) #f)", // undefined
-    "<=" -> "(define/contract (<= x y) (~> number? bool?) (or (< x y) (= x y)))",
+    "<=" -> "(define/contract (<= x y) (~> number? number? bool?) (or (< x y) (= x y)))",
     //">"            -> "(define/contract (> x y) (~> number? bool?) (not (<= x y)))",
-    ">=" -> "(define/contract (>= x y) (~> number? bool?) (or (> x y) (= x y)))",
     "char>?" -> "(define/contract (char>? c1 c2) (~> char? bool?)  (not (char<=? c1 c2)))",
     "char<=?" -> "(define/contract (char<=? c1 c2) (~> char? bool?)  (or (char<? c1 c2) (char=? c1 c2)))",
     "char>=?" -> "(define/contract (char<=? c1 c2) (~> char? bool?) (or (char>? c1 c2) (char=? c1 c2)))",

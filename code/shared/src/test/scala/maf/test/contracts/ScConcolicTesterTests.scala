@@ -187,5 +187,5 @@ trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
   //  Set(Integer(1)),
   //  name = "foononterm"
   //)
-  analyze("(define (fac x) (if (<= x 0) 1 (* x (fac (- x 1))))) (fac (OPQ number?))", Integer(120))
+  analyze("(define (fac x) (if (<= x 0) 1 (* x (fac (- x 1))))) (fac 5)", Integer(120))
 }
