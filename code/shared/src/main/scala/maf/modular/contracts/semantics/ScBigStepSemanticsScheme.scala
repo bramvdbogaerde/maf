@@ -220,8 +220,10 @@ trait ScSharedSemantics extends ScSemantics with ScSemanticsHooks {
     case test: AbstractScTest =>
       evalTestGuard(test)
 
-    case ScAnd(operands, _)                       => evalAnd(operands)
-    case ScOr(operands, _)                        => evalOr(operands)
+    case ScAnd(operands, _) => evalAnd(operands)
+    case ScOr(operands, _)  => evalOr(operands)
+    case ScFunctionAp(ScIdentifier("safe", _), _, _, _) =>
+      result(lattice.schemeLattice.nil)
     case ScFunctionAp(operator, operands, idn, _) => evalFunctionAp(operator, operands, idn)
     case v: ScValue                               => evalValue(v)
     case exp: ScIdentifier                        => evalIdentifier(exp)

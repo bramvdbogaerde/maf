@@ -4,7 +4,6 @@ import maf.core._
 import maf.language.CScheme.TID
 import maf.lattice.interfaces.BoolLattice
 import maf.language.scheme._
-import maf.language.scheme.primitives.SchemePrimitive
 import maf.language.scheme.lattices.SchemeOp.IsProcedure
 
 /**
@@ -12,8 +11,6 @@ import maf.language.scheme.lattices.SchemeOp.IsProcedure
  *  becomes a Scheme lattice.
  */
 object Product2SchemeLattice {
-
-  import maf.util.MonoidInstances._
 
   trait StoreWrapper[A <: Address, L] {
     val store: Store[A, L]
