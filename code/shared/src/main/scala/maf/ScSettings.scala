@@ -5,4 +5,5 @@ object ScSettings {
   val ENABLE_PRIMITIVE_SYMBOLS = false
   val DEBUG_CONCOLIC = false
   val DEBUG_STATIC = true
+  val DEBUG_COLLAB = true
 }

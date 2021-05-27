@@ -4,6 +4,7 @@ import maf.language.contracts.ScExp
 import maf.concolic.contracts.ConcolicTesting
 import maf.util.benchmarks.Timeout
 import maf.concolicbridge.assumptions.Tracker
+import maf.language.contracts.Printer
 
 sealed trait AnalysisState
 case object Finished extends AnalysisState
@@ -47,9 +48,12 @@ abstract class ConcolicBridge(exp: ScExp) {
     val instrumented = analysis.instrumenter.run(exp)
     currentExp = Some(instrumented)
 
-    if (instrumented != exp) {
+    // only continue if the static analysis has added instrumentation
+    // and if it coildn't verify everything (there are still blames)
+    if (instrumented != exp && analysis.summary.blames.nonEmpty) {
       Suspended(instrumented, tracker) { (exp, tracker) =>
-        println(s"New program: ${exp}")
+        println(s"New program:")
+        new Printer().display(exp)
         // finally we pass the instrumented expression to the
         // concolic tester and make it search for potential errors
         val tester = concolicTester(exp)

@@ -104,7 +104,7 @@ trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
 
     (define (bar x)
       (if (< x 0)
-          #f 
+          #f
           (foo x)))
 
     (bar (OPQ number?))
@@ -116,7 +116,7 @@ trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
   analyzeComplete(
     """
     (define (foo x)
-        (cond 
+        (cond
           ((< x 0) #f)
           ((< x 4) (foo (+ x 1)))
           (else #t)))
@@ -176,16 +176,16 @@ trait ScConcolicTesterTests extends AnyFlatSpec with should.Matchers {
     Set(Integer(2)),
     name = "fibonnaci"
   )
-  analyzeComplete(
-    """
-    (define (foo n)
-      (if (< n 10)
-          1
-          (foo (+ n 1))))
-    (foo (OPQ number?))
-    """,
-    Set(Integer(1)),
-    name = "foononterm"
-  )
-  //analyze("(define (fac x) (if (<= x 0) 1 (* x (fac (- x 1))))) (fac (OPQ number?))", Integer(120))
+  //analyzeComplete(
+  //  """
+  //  (define (foo n)
+  //    (if (< n 10)
+  //        1
+  //        (foo (+ n 1))))
+  //  (foo (OPQ number?))
+  //  """,
+  //  Set(Integer(1)),
+  //  name = "foononterm"
+  //)
+  analyze("(define (fac x) (if (<= x 0) 1 (* x (fac (- x 1))))) (fac (OPQ number?))", Integer(120))
 }

@@ -18,6 +18,9 @@ import maf.language.contracts.ScLattice.AssumedValue
 import maf.language.contracts.ScLattice.AssumptionGuard
 import maf.ScSettings._
 import maf.concolicbridge.Instrumenter
+import maf.modular.contracts.domain.ScSharedSchemePrimitives
+import maf.modular.contracts.ScPrimAddr
+import scala.concurrent.duration.Duration
 
 case class PrimitiveNotFound(name: String) extends Exception {
   override def getMessage(): String =
@@ -70,6 +73,17 @@ object ScConcretePrimitives {
       case _             => throw new Exception(s"expected 2 arguments got ${args.size}")
     }
 
+  }
+
+  /** Returns true if the argument is a real or an integer */
+  object `number?` extends SimplePrim {
+    override val name: String = "number?"
+    override def call(args: List[ConcreteValues.Value], position: Position.Position): ConcreteValues.Value = args match {
+      case Value.Integer(_) :: Nil => Value.Bool(true)
+      case Value.Real(_) :: Nil    => Value.Bool(true)
+      case _ :: Nil                => Value.Bool(false)
+      case _                       => throw new Exception(s"expected 2 arguments got ${args.size}")
+    }
   }
 
   object `any?` extends SimplePrim {
@@ -226,7 +240,7 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
   import ScConcretePrimitives._
   private def interop = new MonadicSchemeInterpreter(ConcolicStore(Map()))
   private def scPrimitives =
-    List(`true?`, `false?`, `dependent-contract?`, `procedure?`, `equal?`, `any?`, `bool?`)
+    List(`true?`, `false?`, `dependent-contract?`, `procedure?`, `equal?`, `any?`, `bool?`, `number?`)
 
   private lazy val allPrimitives =
     (interop.Primitives.allPrimitives.map(_._2) ++ scPrimitives).map(p => (p.name, p)).toMap
@@ -310,7 +324,17 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
     addSymbolicVariable(symbolicVariable) >> withContext { context =>
       val id = ScIdentifier(symbolicVariable, Identity.none)
       val value = context.inputGenerator.generate(Opq(refinements), id)
-      pure(PS(context.inputs.get(symbolicVariable).getOrElse(value), id))
+      withPc(pc => {
+        refinements.foldLeft(pc)((accpc, r) =>
+          accpc.and(
+            ScFunctionAp.isTrue(ScFunctionAp.primitive(r, List(id), Identity.none))
+          )
+        )
+      }).flatMap(pc =>
+        replacePc(pc) {
+          pure(PS(context.inputs.get(symbolicVariable).getOrElse(value), id))
+        }
+      )
     }
   }
 
@@ -439,7 +463,7 @@ abstract class ConcolicTesting(
     exp: ScExp,
     defaultMaxDepth: Int = 100,
     exploration: ExplorationStrategy = Nearest)
-    extends ConcolicAnalysisSemantics {
+    extends ConcolicAnalysisSemantics { outer =>
   import ConcreteValues.Value
 
   private var _results: List[Value] = List()
@@ -504,27 +528,50 @@ abstract class ConcolicTesting(
     }
   })
 
+  /** Provides access to primitives with contracts */
+  class SharedPrimitives extends ScSharedSchemePrimitives[ScConcreteValues.ScAddr] {
+    private var store: StoreCache = ConcolicStore(Map())
+    def currentStore: StoreCache = store
+
+    override type Value = Val
+    override type Context = ()
+    override val lattice: ScSchemeLattice[Value, Addr] = outer.lattice
+
+    implicit override def viewAddr(addr: ScAddresses[Context]): Addr = addr match {
+      case ScPrimAddr(name) => allocator.allocPrim(name)
+      case addr             => (0, ScConcreteValues.ScAbstractInfo(addr))
+    }
+
+    override def updateStore(v: (Addr, Value), symbolic: ScExp = ScNil()): Unit =
+      store = (store.extend(v._1, PS(v._2, symbolic)).asInstanceOf[ConcolicStore])
+
+    override val primNames: Set[String] =
+      primitives.toSet
+
+  }
+
+  private val sharedPrimitives: SharedPrimitives = new SharedPrimitives()
+
   /**
    * Creates an initial environment with all the necessary primitives
    * mapped to primitive addresses
    */
   private def initialEnv: BasicEnvironment[ScConcreteValues.ScAddr] = {
-    BasicEnvironment(primitives.map(p => (p, allocator.allocPrim(p))).toMap)
+    BasicEnvironment(sharedPrimitives.primBindings.toMap)
   }
 
   /**
    * Creates an initial store where addresses of the primitives are
    * mapped to the actual primitives
    */
-  private def initialConcolicStore: ConcolicStore = {
-    ConcolicStore(primitives.map(p => (allocator.allocPrim(p), PS(ConcreteValues.Value.Primitive(p), ScNil()))).toMap)
-  }
+  private def initialConcolicStore: ConcolicStore =
+    sharedPrimitives.currentStore
 
   /**
    * Creates an initial context, starting from the given
    * root element.
    */
-  private def initialContext(inputs: Map[String, Value] = Map()): ConcolicContext =
+  private def initialContext(): ConcolicContext =
     ConcolicContext(
       env = initialEnv,
       store = initialConcolicStore,
@@ -543,6 +590,10 @@ abstract class ConcolicTesting(
     analyzeWithTimeoutInstrumented(timeout)
 
   def analyzeWithTimeoutInstrumented(timeout: Timeout.T): ScExp = {
+    sharedPrimitives.setupMonitoredPrimitives()
+    sharedPrimitives.setupOtherPrimitives()
+    println(initialConcolicStore.lookup(allocator.allocPrim("number?")))
+
     var next: Option[Map[String, Val]] = Some(Map())
     var ccontext = initialContext()
     var iters = 0
@@ -575,9 +626,16 @@ abstract class ConcolicTesting(
     lastInstrumenter.run(exp)
   }
 
-  def analyze(): Unit = analyzeWithTimeout(Timeout.none)
-  def analyzeOnce(context: ConcolicContext = initialContext()): Value =
+  def analyze(): Unit = analyzeWithTimeout(Timeout.start(Duration(20, "seconds")))
+  def analyzeOnce(context: ConcolicContext): Value =
     analysisIteration(context)._2
+
+  def analyzeOnce(): Value = {
+    sharedPrimitives.setupMonitoredPrimitives()
+    sharedPrimitives.setupOtherPrimitives()
+
+    analyzeOnce(initialContext())
+  }
 
   private def nextTarget(context: ConcolicContext): (ConcolicContext, Option[Map[String, Value]]) = {
     var tree = context.root

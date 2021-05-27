@@ -2,29 +2,42 @@ package maf.modular.contracts.domain
 
 import maf.modular.contracts.semantics._
 import maf.modular.contracts._
-import maf.core.{BasicEnvironment, Environment, Identity}
+import maf.core.{BasicEnvironment, Identity}
 import maf.language.contracts.ScExp
 import maf.language.contracts.ScLattice.{Arr, Grd, Thunk}
 import maf.modular.GlobalStore
+import maf.language.contracts.ScSchemeLattice
+import maf.language.scheme.primitives.SchemePrimitive
+import maf.core.Address
+import maf.language.contracts.ScNil
+import maf.language.contracts.ScIdentifier
 
-trait ScSchemePrimitives extends ScModSemanticsScheme with GlobalStore[ScExp] {
+/** Primitives that can be use in both the static analysis and concrete analysis */
+trait ScSharedSchemePrimitives[Addr <: Address] {
+  type Context
+  type Value
+  val lattice: ScSchemeLattice[Value, Addr]
+
+  implicit def viewAddr(addr: ScAddresses[Context]): Addr
+  def updateStore(v: (Addr, Value), symbolic: ScExp = ScNil()): Unit
+
   trait Implies {
     def ~>(implies: Implies): Implies
 
     def collectDomainContracts(
         implies: Implies
-      ): List[ScAddresses[Addr]] = implies match {
-      case StringImplication(prim) => List(ScPrimAddr(prim))
+      ): List[Addr] = implies match {
+      case StringImplication(prim) => List(viewAddr(ScPrimAddr(prim)))
       case Implication(left, right) =>
         collectDomainContracts(left) ++ collectDomainContracts(right)
     }
 
     def asGrd(name: String): Value = this match {
       case Implication(left, StringImplication(range)) =>
-        val rangeMaker = lattice.thunk(Thunk(ScPrimAddr(range)))
-        val rangeMakerAddr = ScPrimRangeAddr(name)
+        val rangeMaker = lattice.thunk(Thunk(viewAddr(ScPrimAddr(range))))
+        val rangeMakerAddr = viewAddr(ScPrimRangeAddr(name))
 
-        store += rangeMakerAddr -> rangeMaker
+        updateStore(rangeMakerAddr -> rangeMaker)
         lattice.grd(Grd(collectDomainContracts(left), rangeMakerAddr))
 
       case _ => throw new Exception("unsupported ")
@@ -41,9 +54,7 @@ trait ScSchemePrimitives extends ScModSemanticsScheme with GlobalStore[ScExp] {
     override def ~>(implies: Implies): Implies = Implication(this, implies)
   }
 
-  override var store: Map[Addr, Value] = Map()
-
-  def primitives =
+  private def primitives =
     Map(
       "+" -> ("number?" ~> "number?" ~> "number?"),
       "-" -> ("number?" ~> "number?" ~> "number?"),
@@ -76,36 +87,61 @@ trait ScSchemePrimitives extends ScModSemanticsScheme with GlobalStore[ScExp] {
       "cdr" -> ("pair?" ~> "any?")
     )
 
-  /** Wraps the primitives into monitors */
   def setupMonitoredPrimitives(): Unit =
     primitives.foreach { case (name, implies) =>
-      val contractAddr = ScGrdAddr(name)
-      val primAddr = ScPrimAddr(name)
+      val contractAddr = viewAddr(ScGrdAddr(name))
+      val primAddr = viewAddr(ScPrimAddr(name))
       val grd = implies.asGrd(name)
-      store += contractAddr -> grd
-      store += primAddr -> lattice.schemeLattice.primitive(name)
-      store += ScMonitoredPrimAddr(name) -> lattice.arr(
-        Arr(Identity.none, Identity.none, contractAddr, primAddr)
+      updateStore(contractAddr -> grd)
+      updateStore(primAddr -> lattice.schemeLattice.primitive(name), ScIdentifier(name, Identity.none))
+      updateStore(
+        viewAddr(ScMonitoredPrimAddr(name)) -> lattice.arr(
+          Arr(Identity.none, Identity.none, contractAddr, primAddr)
+        )
       )
     }
 
+  val primNames: Set[String]
+
   private lazy val otherPrimitives =
-    primMap.keys.toSet -- primitives.map(_._1)
+    primNames -- primitives.map(_._1)
 
   /** Inject the other scheme primitives that do not have a contract (yet) */
   def setupOtherPrimitives(): Unit =
     otherPrimitives.foreach { name =>
-      store += ScPrimAddr(name) -> lattice.schemeLattice.primitive(name)
+      updateStore(viewAddr(ScPrimAddr(name)) -> lattice.schemeLattice.primitive(name), ScIdentifier(name, Identity.none))
     }
 
   def primBindings: Iterable[(String, Addr)] =
-    primitives.keys.map(name => (name, ScMonitoredPrimAddr(name))) ++
-      otherPrimitives.map(name => (name, ScPrimAddr(name)))
+    primitives.keys.map(name => (name, viewAddr(ScMonitoredPrimAddr(name)))) ++
+      otherPrimitives.map(name => (name, viewAddr(ScPrimAddr(name))))
 
-  def baseEnv: Env = BasicEnvironment(primBindings.toMap)
+}
+
+trait ScSchemePrimitives extends ScModSemanticsScheme with GlobalStore[ScExp] { outer =>
+  override var store: Map[Addr, Value] = Map()
+
+  def primitives: ScSharedSchemePrimitives[outer.Addr] = new ScSharedSchemePrimitives[outer.Addr] {
+    override type Value = outer.Value
+    override type Context = outer.VarAllocationContext
+    override val lattice: ScSchemeLattice[Value, Addr] = outer.lattice
+    implicit override def viewAddr(addr: ScAddresses[Context]): Addr = addr
+
+    override def updateStore(v: (Addr, Value), s: ScExp = ScNil()): Unit =
+      store += v
+
+    override val primNames: Set[String] =
+      outer.primMap.keys.toSet
+  }
+
+  def baseEnv: Env = BasicEnvironment(primitives.primBindings.toMap)
+
+  def primBindings: Iterable[(String, Addr)] =
+    primitives.primBindings
+
   def setup(): Unit = {
     println("Setting up analysis")
-    setupMonitoredPrimitives()
-    setupOtherPrimitives()
+    primitives.setupMonitoredPrimitives()
+    primitives.setupOtherPrimitives()
   }
 }

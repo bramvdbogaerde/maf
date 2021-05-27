@@ -168,7 +168,7 @@ trait ScAbstractSemanticsMonadAnalysis {
    */
   def debug(c: => ()): ScEvalM[()] = unit.flatMap { _ =>
     if (ScSettings.DEBUG_STATIC || ScSettings.DEBUG_STATIC) {
-      println("***debug***")
+      print(s"[debug] ")
       c
     }
     pure(())

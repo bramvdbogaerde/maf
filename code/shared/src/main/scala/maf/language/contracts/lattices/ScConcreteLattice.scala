@@ -11,9 +11,12 @@ import maf.lattice.interfaces.BoolLattice
 import maf.language.contracts.ScLattice._
 import maf.language.contracts.ScLattice
 import maf.language.scheme.primitives.SchemePrimitive
+import maf.modular.contracts.ScAddresses
 
 object ScConcreteValues {
   sealed trait ScValue extends ConcreteValues.Value
+
+  case class ScAbstractInfo(val addr: ScAddresses[()]) extends ConcreteValues.AddrInfo
 
   case class ScAddr(val addr: ConcreteValues.Addr) extends Address {
     override def printable: Boolean = true

@@ -10,7 +10,7 @@ object ConcreteValues {
 
   trait Value
 
-  sealed trait AddrInfo
+  trait AddrInfo
 
   trait Prim {
     val name: String
