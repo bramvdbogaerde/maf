@@ -29,6 +29,18 @@ object ScConcretePrimitives {
 
   import scala.collection.immutable.Nil
 
+  /** Checks whether the given value is a boolean */
+  object `bool?` extends SimplePrim {
+    override val name: String = "bool?"
+
+    override def call(args: List[ConcreteValues.Value], position: Position.Position): ConcreteValues.Value = args match {
+      case Value.Bool(_) :: Nil => Value.Bool(true)
+      case _ :: Nil             => Value.Bool(false)
+      case _ =>
+        throw new Exception(s"expected 2 arguments got ${args.size}")
+    }
+  }
+
   /** Checks whether two objects are equal. */
   object `equal?` extends SimplePrim {
     override val name: String = "equal?"
@@ -214,7 +226,7 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
   import ScConcretePrimitives._
   private def interop = new MonadicSchemeInterpreter(ConcolicStore(Map()))
   private def scPrimitives =
-    List(`true?`, `false?`, `dependent-contract?`, `procedure?`, `equal?`, `any?`)
+    List(`true?`, `false?`, `dependent-contract?`, `procedure?`, `equal?`, `any?`, `bool?`)
 
   private lazy val allPrimitives =
     (interop.Primitives.allPrimitives.map(_._2) ++ scPrimitives).map(p => (p.name, p)).toMap
