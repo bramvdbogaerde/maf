@@ -1,7 +1,7 @@
 package maf.cli.experiments.contracts;
 
 object Collab extends Benchmarks with CollabBenchmark {
-  override val testBenchmarks: List[Benchmark] = List(
+  val _testBenchmarks: List[Benchmark] = List(
     //fromFile("test/soft-contract/NguyenGTH18/safe/dynamic-tests.rkt"),
     //fromFile("test/soft-contract/NguyenGTH18/safe/sym-exe/ack.rkt"),
     fromFile("test/soft-contract/NguyenGTH18/safe/sym-exe/even-odd.rkt"), // OK
@@ -26,6 +26,10 @@ object Collab extends Benchmarks with CollabBenchmark {
     fromFile("test/soft-contract/NguyenGTH18/safe/sym-exe/id-dependent.rkt"), // OK
     fromFile("test/soft-contract/NguyenGTH18/safe/sym-exe/impossible-precon.rkt") // OK
     // fromFile("test/soft-contract/NguyenGTH18/safe/sym-exe/recip.rkt") // variable "not" not found
+  )
+
+  val testBenchmarks: List[Benchmark] = List(
+    fromFile("test/soft-contract/NguyenGTH18/safe/octy/ex-02.rkt") // OK
   )
 
   def main(args: Array[String]): Unit = {

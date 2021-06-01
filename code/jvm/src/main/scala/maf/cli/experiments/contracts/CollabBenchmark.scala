@@ -97,8 +97,8 @@ object CollabBenchmark {
     case ScOr(exprs, _) =>
       exprs.map(count).foldLeft(Counter())((c1, c2) => c1.combine(c2))
 
-    case ScLetRec(_, _, body, _) =>
-      count(body)
+    case ScLetRec(_, bindings, body, _) =>
+      bindings.map(count).foldLeft(Counter())(_ combine _) combine count(body)
 
     case ScSet(_, value, _) =>
       count(value)
@@ -167,8 +167,8 @@ object CollabBenchmark {
     case ScTest(_, _, _) =>
       Counter(numTests = 1)
 
-    case _: ScIfGuard =>
-      Counter()
+    case g: ScIfGuard =>
+      count(g.consequent) combine g.alternatives.map(count).foldLeft(Counter())(_ combine _)
 
     case ScProvideContracts(_, contracts, _) =>
       contracts.map(count).foldLeft(Counter())((c1, c2) => c1.combine(c2))

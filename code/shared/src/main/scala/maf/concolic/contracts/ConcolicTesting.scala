@@ -21,6 +21,7 @@ import maf.concolicbridge.Instrumenter
 import maf.modular.contracts.domain.ScSharedSchemePrimitives
 import maf.modular.contracts.ScPrimAddr
 import scala.concurrent.duration.Duration
+import maf.ScSettings
 
 case class PrimitiveNotFound(name: String) extends Exception {
   override def getMessage(): String =
@@ -41,6 +42,16 @@ object ScConcretePrimitives {
       case _ :: Nil             => Value.Bool(false)
       case _ =>
         throw new Exception(s"expected 2 arguments got ${args.size}")
+    }
+  }
+
+  object `string?` extends SimplePrim {
+    override val name: String = "string?"
+    override def call(args: List[ConcreteValues.Value], position: Position.Position): ConcreteValues.Value = args match {
+      case Value.Str(_) :: Nil => Value.Bool(true)
+      case _ :: Nil            => Value.Bool(false)
+      case _ =>
+        throw new Exception(s"expected 1 argument got ${args.size}")
     }
   }
 
@@ -240,7 +251,7 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
   import ScConcretePrimitives._
   private def interop = new MonadicSchemeInterpreter(ConcolicStore(Map()))
   private def scPrimitives =
-    List(`true?`, `false?`, `dependent-contract?`, `procedure?`, `equal?`, `any?`, `bool?`, `number?`)
+    List(`true?`, `false?`, `dependent-contract?`, `procedure?`, `equal?`, `any?`, `bool?`, `number?`, `string?`)
 
   private lazy val allPrimitives =
     (interop.Primitives.allPrimitives.map(_._2) ++ scPrimitives).map(p => (p.name, p)).toMap
@@ -254,7 +265,7 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
   override def primName(p: Prim): String = p.name
 
   override def throwBlameError(blame: ScLattice.Blame): ScEvalM[Unit] =
-    error(ConcTree.blame(BlameValue(blame)))
+    debugConc(s"blame error $blame") >> error(ConcTree.blame(BlameValue(blame)))
 
   override def eval(expr: ScExp): ScEvalM[PostValue] =
     expr match {
@@ -338,6 +349,9 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
     }
   }
 
+  private def debugConc(s: String): ScEvalM[Unit] =
+    effectful { if (ScSettings.DEBUG_CONCOLIC) { println(s"[debugConc] $s") } }
+
   /**
    * Throw an error that the assumption has failed.
    *
@@ -350,7 +364,13 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
 
   override def evalTestGuard(test: AbstractScTest): ScEvalM[PostValue] = test match {
     case _: ScTest =>
-      eval(test.guard).flatMap(value => cond(value, result(lattice.schemeLattice.nil), throwAssumptionFailure(test.guardName, test.idn) >> void))
+      eval(test.guard).flatMap(value =>
+        debugConc(s"Testing ${test.guardName}, got ${value} as answer for ${test.guard}") >>
+          cond(value,
+               result(lattice.schemeLattice.nil),
+               debugConc(s"failed test ${test.guardName}") >> throwAssumptionFailure(test.guardName, test.idn) >> void
+          )
+      )
 
     // all the other cases are either violated in a previous run, or verified, in both cases we do not need to check them any longer
     case _ => result(lattice.schemeLattice.nil)

@@ -296,8 +296,9 @@ class ScSMTSolverJVM[V](
     val values: Array[Value] = result
       .map(u =>
         u.getFuncDecl().getName().toString match {
-          case "VInt"  => Value.Integer(u.getArgs()(0).asInstanceOf[IntNum].getInt())
-          case "VBool" => Value.Bool(u.getArgs()(0).asInstanceOf[BoolExpr].isTrue())
+          case "VInt"    => Value.Integer(u.getArgs()(0).asInstanceOf[IntNum].getInt())
+          case "VBool"   => Value.Bool(u.getArgs()(0).asInstanceOf[BoolExpr].isTrue())
+          case "VString" => Value.Str("")
           case v =>
             if (ScSettings.DEBUG_SMT) {
               println(v)
@@ -312,8 +313,8 @@ class ScSMTSolverJVM[V](
       .zip(symbols.map(_.toString))
       .flatMap { case (v, k) =>
         injectValue(v) match {
-          case Some(v) => Some((k, v))
-          case None    => None
+          case Some(v) if primitives.get(k).isEmpty => Some((k, v))
+          case _                                    => None
         }
       })
       .toMap
