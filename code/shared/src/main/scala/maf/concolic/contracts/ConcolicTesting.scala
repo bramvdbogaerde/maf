@@ -55,6 +55,17 @@ object ScConcretePrimitives {
     }
   }
 
+  object `string-length` extends SimplePrim {
+    override val name: String = "string-length"
+    override def call(args: List[ConcreteValues.Value], position: Position.Position): ConcreteValues.Value = args match {
+      case Value.Str(s) :: Nil => Value.Integer(s.length)
+      case a :: Nil =>
+        throw new Exception(s"expected string but got $a")
+      case _ =>
+        throw new Exception(s"expected 1 argument got ${args.size}")
+    }
+  }
+
   /** Checks whether two objects are equal. */
   object `equal?` extends SimplePrim {
     override val name: String = "equal?"
@@ -251,7 +262,7 @@ trait ConcolicAnalysisSemantics extends ScSharedSemantics with ConcolicMonadAnal
   import ScConcretePrimitives._
   private def interop = new MonadicSchemeInterpreter(ConcolicStore(Map()))
   private def scPrimitives =
-    List(`true?`, `false?`, `dependent-contract?`, `procedure?`, `equal?`, `any?`, `bool?`, `number?`, `string?`)
+    List(`true?`, `false?`, `dependent-contract?`, `procedure?`, `equal?`, `any?`, `bool?`, `number?`, `string?`, `string-length`)
 
   private lazy val allPrimitives =
     (interop.Primitives.allPrimitives.map(_._2) ++ scPrimitives).map(p => (p.name, p)).toMap
