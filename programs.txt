@@ -1,0 +1,12 @@
+test/R5RS/gabriel/dderiv.scm
+test/R5RS/scp1/cashdesk-counter.scm
+test/R5RS/scp1/twitter.scm
+test/R5RS/various/values.scm
+test/R5RS/WeiChenRompf2019/rsa.scm
+test/R5RS/scp1/parking-counter.scm
+test/R5RS/scp1/tree-with-branches.scm
+test/R5RS/various/eta.scm
+test/R5RS/various/four-in-a-row.scm
+test/R5RS/various/grid.scm
+test/R5RS/scp1/simpson-integral.scm
+test/R5RS/scp1/third-root.scm
