@@ -5,6 +5,23 @@ lazy val root = project
   .in(file("."))
   .aggregate(mafJVM, mafJS)
 
+// Add mainclass configuration
+def withJar(main: String, jarFile: String): Seq[Def.Setting[_]] = 
+  baseAssemblySettings ++ inTask(assembly) {
+    Seq(
+      mainClass := Some(main),
+      assemblyJarName := jarFile+".jar",
+    )
+  }
+
+ThisBuild / assemblyMergeStrategy := {
+  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+  case _ => MergeStrategy.last
+}
+
+// Entrypoint specific configurations
+lazy val PersesPropertyJar = config("persesProp").withDescription("Perses property jar") extend Compile
+
 lazy val maf = crossProject(JVMPlatform, JSPlatform)
   .withoutSuffixFor(JVMPlatform)
   .crossType(CrossType.Full)
@@ -93,11 +110,12 @@ lazy val maf = crossProject(JVMPlatform, JSPlatform)
     Compile / mainClass := Some("maf.cli.Main"),
     //libraryDependencies += "net.openhft" % "affinity" % "3.21ea82",
     run / fork := false,
+    inConfig(PersesPropertyJar)(withJar("maf.cli.experiments.delta.PersesProperty", "perses-property"))
   )
   .jvmConfigure(_.enablePlugins(JmhPlugin))
   .jsSettings(
     /** Dependencies */
-    libraryDependencies += ("org.scala-js" %%% "scalajs-dom" % "1.1.0").cross(CrossVersion.for3Use2_13)
+    libraryDependencies += ("org.scala-js" %%% "scalajs-dom" % "2.8.0")
   )
 
 lazy val mafJVM = maf.jvm

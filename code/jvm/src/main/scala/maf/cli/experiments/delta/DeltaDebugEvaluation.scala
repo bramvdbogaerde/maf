@@ -1,13 +1,14 @@
 package maf.cli.experiments.delta
 
-import java.io.{BufferedReader, InputStreamReader}
+import java.nio.file.*
+import java.io.{BufferedReader, File, InputStreamReader}
 import java.util.concurrent.*
 import maf.language.scheme.interpreter.*
 import maf.language.scheme.primitives.*
 import maf.bench.scheme.*
 import scala.concurrent.duration.Duration
 import maf.language.scheme.interpreter.ConcreteValues._
-import maf.util.benchmarks.Timeout
+import maf.util.benchmarks.{Clock, Timeout}
 import maf.util.*
 import maf.language.scheme.*
 import maf.core.*
@@ -583,16 +584,81 @@ object RemoveExpensiveFunctionsEval extends OrderedSchemeReduceEval:
             None // Execution failed, this one can't be removed
     }
 
-/** Entrypoint for testing the property, used by Perses */
+/**
+ * Entrypoint for testing the property, used by Perses.
+ *
+ * Perses calls the property script with the filename of the file originally reduced. It does not provide the filename as an argument to the property
+ * script. As such we assume that the filename is always `program.rkt` in the current directory.
+ */
 object PersesProperty:
-    def main(args: Array[String]): Unit = ???
+    def main(args: Array[String]): Unit =
+        if !File("program.rkt").exists() then
+            println("No file named 'program.rkt' found in the current directory")
+            sys.exit(1)
+
+        val benchmarks = Set("program.rkt")
+
+        val reporter = new ConsoleDifferentialTestingReporter()
+        val tester = new DifferentialTesting(new InstrumentationBasedInterpreterComparison(), reporter, benchmarks)
+        tester.main(Array())
+        if reporter.hasDisagreement then sys.exit(0)
+        else sys.exit(1)
 
 /** Entrypoint for executing the Perses program reducer, parses its output for statistics that we use during the evaluation */
 object Perses:
     private val PERSES_PATH_JAR = sys.env("PERSES_PATH")
+    private val SCHEME_LANG_PATH_JAR = sys.env("PERSES_LANGUAGE_PATH")
+    private val TEST_SCRIPT_JAR = sys.env("PERSES_PROPERTY_JAR")
+
+    private val testScript = s"""|#!/bin/bash
+    |java -jar ${TEST_SCRIPT_JAR}
+    """.stripMargin
+
+    def testFile(filename: String): Unit =
+        import scala.sys.process._
+
+        // output path for perses
+        val outputPath = "out/output-perses-" + Clock.nowStr()
+        Files.createDirectories(Paths.get(outputPath))
+        // temp path is used for storing files needed for the reduction,
+        val tempPath = "out/workdir-" + Clock.nowStr()
+        Files.createDirectories(Paths.get(tempPath))
+        val propPath = tempPath + "/r.sh"
+        // copy the file to benchmark to the tempPath
+        FileOps.copy(filename, tempPath + "/program.rkt")
+
+        // copy the test script to the working directory
+        val w = Writer.open(tempPath + "/r.sh")
+        Writer.write(w, testScript)
+        Writer.close(w)
+
+        // mark it as executable
+        FileOps.markExecutable(propPath)
+
+        val cmd = Seq(
+          "java",
+          "-jar" PERSES_PATH_JAR,
+          "--input-file",
+          File(tempPath + "/program.rkt").getAbsolutePath().nn,
+          "--test-script",
+          File(propPath).getAbsolutePath().nn,
+          "--language-ext-jars",
+          SCHEME_LANG_PATH_JAR,
+          "--output-dir",
+          File(outputPath).getAbsolutePath().nn,
+          "--progress-dump-file",
+          "output.dump",
+          "--threads",
+          Runtime.getRuntime().nn.availableProcessors().toString(),
+          //"--alg",
+          //"ddmin"
+        )
+        println(cmd)
+
+        println(Process(cmd, new File(tempPath)).!!)
 
     def main(args: Array[String]): Unit =
-        ???
+        testFile("test/R5RS/various/grid.scm")
 
 object Evaluation:
     val benchmarks: Set[String] = Set(

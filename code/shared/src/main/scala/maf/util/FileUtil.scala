@@ -260,8 +260,14 @@ object MAFLogger:
 //        logger.log(finalMsg)
 
 object FileOps:
+    import java.nio.file.attribute.*
 
     def copy(source: String, destination: String): Unit =
         java.nio.file.Files.copy(Paths.get(source), Paths.get(destination), StandardCopyOption.REPLACE_EXISTING)
+
+    def markExecutable(filename: String): Unit =
+        val currentPerms = java.nio.file.Files.getPosixFilePermissions(Paths.get(filename))
+        currentPerms.add(PosixFilePermission.OWNER_EXECUTE)
+        java.nio.file.Files.setPosixFilePermissions(Paths.get(filename), currentPerms)
 
 end FileOps
