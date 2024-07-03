@@ -19,6 +19,10 @@ import maf.deltaDebugging.treeDD.transformations.TransformationManager
 import maf.lattice.MathOps
 import scala.util.Random
 import maf.deltaDebugging.treeDD.variants.GTR
+import maf.deltaDebugging.treeDD.Reducer
+import maf.deltaDebugging.treeDD.IntermediateReducer
+import maf.deltaDebugging.treeDD.TimedReducer
+import maf.deltaDebugging.treeDD.LambdaOracle
 
 trait Instrumenter:
     def instrument(program: SchemeExp): SchemeExp
@@ -341,7 +345,8 @@ abstract class DeltaDebug(comparison: InterpreterComparison):
                 false
 
     def reduce(program: SchemeExp): SchemeExp =
-        SchemeReduce.reduce(program, oracle, identity, TransformationManager.allTransformations, Some(deadCodeRemover))
+        val reducer = new SchemeReduce(program, identity, TransformationManager.allTransformations, Some(deadCodeRemover)) with LambdaOracle(oracle)
+        reducer.reduce()
 
     def onBenchmark(path: String): Unit =
         val content = Reader.loadFile(path)
@@ -412,19 +417,16 @@ case class ReductionData(
     reductionPercentage: Double,
     reductionTime: Long,
     oracleInvocations: Int,
-    oracleEvolution: List[Double],
+    oracleEvolution: List[Long],
     sizeEvolution: List[Int]):
     def dump(): Unit =
         println(
           s"Reduction on ${benchmark} of size ${origSize}, reduced to ${reducedSize} (${reductionPercentage * 100}%) in ${reductionTime / 1e3}s with ${oracleInvocations} invocations"
         )
 
-abstract class EvalStrategy:
-    var oracleInvocations: Int = 0
-
-    def oracle(comparison: PrintBasedInterpreterComparison)(program: SchemeExp): Boolean = {
-        oracleInvocations += 1
-        println(f"Invoking oracle ${oracleInvocations}")
+trait ComparisonReducer extends Reducer[SchemeExp]:
+    val comparison: PrintBasedInterpreterComparison
+    def invokeOracle(program: SchemeExp): Boolean = {
         // We don't want the delta debugger to consider the instrumented program,
         // but only use instrumentation for comparison, hence we need to instrument now and not earlier.
         // (We could instrument earlier, but we could then remove parts of the instrumentation and have odd results, possibly
@@ -447,15 +449,15 @@ abstract class EvalStrategy:
         res
     }
 
-    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit): SchemeExp
-
-    def eval(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit): ReductionData =
-        // TODO: warmup + multiple iterations, add statistics to ReductionData (or use one of the helper classes for that)
-        oracleInvocations = 0
-
+trait EvalStrategy(val comparison: PrintBasedInterpreterComparison)
+    extends Reducer[SchemeExp],
+      ComparisonReducer,
+      TimedReducer[SchemeExp],
+      IntermediateReducer[SchemeExp]:
+    def eval(program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit): ReductionData =
         val startTime = System.currentTimeMillis()
 
-        val reduced = reduce(comparison, program, name, cb)
+        val reduced = reduce()
         println(reduced)
         val endTime = System.currentTimeMillis()
         val totalReductionTime = endTime - startTime
@@ -466,68 +468,41 @@ abstract class EvalStrategy:
           reducedSize = reduced.size,
           reductionTime = totalReductionTime,
           reductionPercentage = 1 - (reduced.size.toDouble / program.size),
-          oracleInvocations = oracleInvocations,
-          oracleEvolution = List(),
-          sizeEvolution = List()
+          oracleInvocations = oracleEvolution.size,
+          oracleEvolution = oracleEvolution,
+          sizeEvolution = expressionEvolution.map(_.size)
         )
 
-object GTREval extends EvalStrategy:
-    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit) =
-        GTR.reduce(
-          program,
-          oracle(comparison),
-          TransformationManager.genericTransformations
-        )
+class GTREval(program: SchemeExp, comparison: PrintBasedInterpreterComparison)
+    extends GTR(program, TransformationManager.genericTransformations)
+    with EvalStrategy(comparison)
 
-object SchemeReduceEval extends EvalStrategy:
-    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit) =
-        SchemeReduce.reduce(
-          program,
-          oracle(comparison),
-          identity,
-          Random.shuffle(TransformationManager.allTransformations)
-        )
+class SchemeReduceEval(tree: SchemeExp, comparison: PrintBasedInterpreterComparison)
+    extends SchemeReduce(tree, identity, Random.shuffle(TransformationManager.allTransformations))
+    with EvalStrategy(comparison)
 
-class OrderedSchemeReduceEval extends EvalStrategy:
-    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit) =
-        SchemeReduce.reduce(
-          program,
-          oracle(comparison),
-          identity,
-          // TODO: order may not be relevant for our set of benchmarks anymore, may need to recompute it
-          TransformationManager.allTransformations
-        )
+// TODO: transformation order may not be relevant for our set of benchmarks anymore, may need to recompute it
+class OrderedSchemeReduceEval(tree: SchemeExp, comparison: PrintBasedInterpreterComparison)
+    extends SchemeReduce(tree, identity, TransformationManager.allTransformations)
+    with EvalStrategy(comparison)
 
-object OrderedSchemeReduceEval extends OrderedSchemeReduceEval
+class LayeredSchemeReduceEval(tree: SchemeExp, comparison: PrintBasedInterpreterComparison)
+    extends LayeredSchemeReduce(tree, identity, Random.shuffle(TransformationManager.allTransformations), 7)
+    with EvalStrategy(comparison)
 
-object LayeredSchemeReduceEval extends EvalStrategy:
-    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit) =
-        LayeredSchemeReduce.reduce(
-          program,
-          oracle(comparison),
-          identity,
-          Random.shuffle(TransformationManager.allTransformations),
-          None,
-          7
-        )
+trait CountingOracle extends ComparisonReducer:
+    override def invokeOracle(program: SchemeExp): Boolean =
+        val result = super.invokeOracle(program)
+        if result then comparison.interpreter2.maxEvalSteps = comparison.interpreter2.getEvalSteps()
+        result
 
 // Uses OrderedSchemeReduce + counting interpreter
-object CountingSchemeReduceEval extends EvalStrategy:
-    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit) =
-        SchemeReduce.reduce(
-          program,
-          p => {
-              val oracleResult = oracle(comparison)(p)
-              // If the oracle found a difference, record the number of steps
-              // and keep this as an upper bound for the following runs
-              if oracleResult then comparison.interpreter2.maxEvalSteps = comparison.interpreter2.getEvalSteps()
-              oracleResult
-          },
-          identity,
-          TransformationManager.allTransformations
-        )
+class CountingSchemeReduceEval(tree: SchemeExp, comparison: PrintBasedInterpreterComparison)
+    extends SchemeReduce(tree, identity, TransformationManager.allTransformations)
+    with CountingOracle
+    with EvalStrategy(comparison)
 
-object RemoveExpensiveFunctionsEval extends OrderedSchemeReduceEval:
+class RemoveExpensiveFunctionsEval(tree: SchemeExp, comparison: PrintBasedInterpreterComparison) extends OrderedSchemeReduceEval(tree, comparison):
     val timeoutSeconds = 30
     def run(comparison: PrintBasedInterpreterComparison, program: SchemeExp): Unit =
         val instrumented = comparison.instrument(program)
@@ -535,13 +510,13 @@ object RemoveExpensiveFunctionsEval extends OrderedSchemeReduceEval:
         val programToRun = SchemeParser.undefine(preluded)
         comparison.interpreter2.run(programToRun, Timeout.start(Duration(timeoutSeconds, "seconds")))
 
-    override def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit) = {
+    override def reduce() = {
         // TODO: count time spent in preprocessing step
         println("Removing lambdas...")
-        run(comparison, program)
-        val preprocessed = preprocess(comparison, program, comparison.interpreter2.stepsSpent)
+        run(comparison, tree)
+        val preprocessed = preprocess(comparison, tree, comparison.interpreter2.stepsSpent)
         println("-----> Done preprocessing")
-        super.reduce(comparison, preprocessed, name, cb)
+        super.reduce(preprocessed)
     }
 
     def preprocess(comparison: PrintBasedInterpreterComparison, program: SchemeExp, stepsSpent: Map[SchemeLambda, Int]): SchemeExp = {
@@ -701,7 +676,8 @@ object Evaluation:
         val program = SchemeParser.undefine(parsed)
         // OrderedSchemeReduceEval.eval(comparison, program, path).dump()
         // CountingSchemeReduceEval.eval(comparison, program, path).dump()
-        RemoveExpensiveFunctionsEval.eval(comparison, program, path, (_, _) => ()).dump()
+        //RemoveExpensiveFunctionsEval.eval(comparison, program, path, (_, _) => ()).dump()
+        ???
 
     // TODO: useful from Turgut's code: check that there are no undefined variables in a program (but maybe before running it rather than after!)
     // p.findUndefinedVariables().isEmpty

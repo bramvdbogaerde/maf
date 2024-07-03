@@ -6,16 +6,23 @@ import maf.util.benchmarks.Timer
 
 type Oracle[E] = E => Boolean
 
-abstract class Reducer[E](originalTree: E, oracle: Oracle[E]):
+abstract class Reducer[E](originalTree: E):
     /** Reduce the given tree for a single step and return the reduced tree */
     protected def reduceSingle(currentTree: E): E
 
-    protected def invokeOracle(e: E): Boolean =
-        oracle(e)
+    protected def invokeOracle(e: E): Boolean
+
+    protected def reduce(e: E): E =
+        FunctionUtils.fix(e)(reduceSingle)
 
     /** Reduce the original Scheme expression according to the given oracle */
-    def reduce(): E =
-        FunctionUtils.fix(originalTree)(reduceSingle)
+    def reduce(): E = reduce(originalTree)
+
+/**
+ * Implements <code>invokeOracle</code> as an invocation of the given lambda
+ */
+trait LambdaOracle[E](oracle: Oracle[E]) extends Reducer[E]:
+    override protected def invokeOracle(e: E): Boolean = oracle(e)
 
 /**
  * Adds instrumentation to the reduction such that it keeps track of the number of oracle invocations, the time it takes to run them, and the time for
@@ -23,10 +30,10 @@ abstract class Reducer[E](originalTree: E, oracle: Oracle[E]):
  */
 trait TimedReducer[E] extends Reducer[E]:
     /** List of execution times, in reverse order, of performing one successful transformation (includes search) */
-    var singleEvolution: List[Double] = List()
+    var singleEvolution: List[Long] = List()
 
     /** List of execution times, in reverse order, of execution the oracle */
-    var oracleEvolution: List[Double] = List()
+    var oracleEvolution: List[Long] = List()
 
     abstract override def reduceSingle(currentTree: E): E =
         val (t, e) = Timer.time(super.reduceSingle(currentTree))

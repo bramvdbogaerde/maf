@@ -3,7 +3,6 @@ package maf.cli.runnables
 import maf.bench.scheme.SchemeBenchmarkPrograms
 import maf.cli.experiments.incremental.*
 import maf.deltaDebugging.treeDD.variants.GTR
-import maf.deltaDebugging.treeDD.variants.GTR.*
 import maf.deltaDebugging.treeDD.transformations.TransformationManager
 import maf.language.CScheme.*
 import maf.language.change.CodeVersion.*
@@ -34,22 +33,22 @@ object IncrementalRun extends App:
         (a.store.keySet ++ b.store.keySet).foldLeft("") { case (str, addr) =>
             val valA = a.store.getOrElse(addr, a.lattice.bottom)
             val valB = b.store.getOrElse(addr, b.lattice.bottom)
-            if valA != valB
-            then str ++ (addr.toString + "\n" + a.lattice.compare(valA, valB) + "\n")
+            if valA != valB then str ++ (addr.toString + "\n" + a.lattice.compare(valA, valB) + "\n")
             else str
         }
 
     class IncrementalSchemeModFAnalysisTypeLatticeNoLogging(prg: SchemeExp, var configuration: IncrementalConfiguration)
         extends BaseModFAnalysisIncremental(prg)
-            with IncrementalSchemeTypeDomain
-            with IncrementalDataFlowVisualisation[SchemeExp]
-            with IncrementalGlobalStoreCY[SchemeExp]:
+        with IncrementalSchemeTypeDomain
+        with IncrementalDataFlowVisualisation[SchemeExp]
+        with IncrementalGlobalStoreCY[SchemeExp]:
 
         override def intraAnalysis(cmp: Component) =
             new IntraAnalysis(cmp) with IncrementalSchemeModFBigStepIntra with IncrementalGlobalStoreCYIntraAnalysis
 
     class IncrementalSchemeModFAnalysisTypeLattice(prg: SchemeExp, configuration: IncrementalConfiguration)
-        extends IncrementalSchemeModFAnalysisTypeLatticeNoLogging(prg, configuration) with IncrementalLogging[SchemeExp]:
+        extends IncrementalSchemeModFAnalysisTypeLatticeNoLogging(prg, configuration)
+        with IncrementalLogging[SchemeExp]:
 
         mode = Mode.Fine
         override def focus(a: Addr): Boolean = !a.toString.contains("Prm")
@@ -73,15 +72,17 @@ object IncrementalRun extends App:
         var anly: Map[Int, BaseModFAnalysisIncremental] = Map() + (0 -> a)
         val t = Timeout.start(Duration(1000, SECONDS))
         def identical(an1: BaseModFAnalysisIncremental, an2: BaseModFAnalysisIncremental): Boolean =
-            if adr.isEmpty
-            then an1.store == an2.store
-            else adr.forall { ad =>
-                an1.store.find(a => ad == a.toString).getOrElse(an1.lattice.bottom) ==  an2.store.find(a => ad == a.toString).getOrElse(an2.lattice.bottom)
-            }
+            if adr.isEmpty then an1.store == an2.store
+            else
+                adr.forall { ad =>
+                    an1.store.find(a => ad == a.toString).getOrElse(an1.lattice.bottom) == an2.store
+                        .find(a => ad == a.toString)
+                        .getOrElse(an2.lattice.bottom)
+                }
         while !a.finished && !t.reached do
             a.step(t)
             anly.find(t => identical(t._2, a)) match {
-                case Some((n, _)) if anly.toList.drop(n+1).exists(t => !identical(t._2, a)) => return (n, step) // Store should have changed in the meantime.
+                case Some((n, _)) if anly.toList.drop(n + 1).exists(t => !identical(t._2, a)) => return (n, step) // Store should have changed in the meantime.
                 case _ =>
                     anly = anly + (step -> a)
                     step = step + 1
@@ -94,17 +95,22 @@ object IncrementalRun extends App:
         val log = Logger.raw("reduced-program")
         import SimpleTimer.*
 
-        val exp = GTR.reduce(text, oracle, TransformationManager.allTransformations)
-        log.log(exp.prettyString())
-        println(exp.prettyString())
-        println(oracle(exp).toString)
-        exp
+        ???
+    //val exp = GTR.reduce(text, oracle, TransformationManager.allTransformations)
+    //log.log(exp.prettyString())
+    //println(exp.prettyString())
+    //println(oracle(exp).toString)
+    //exp
 
     // Returns a boolean indicating whether the analysis is fully precise.
     def analyse(text: SchemeExp, throwAssertionViolations: Boolean, logging: Boolean = true): Boolean =
         try
-            val a = if logging then new IncrementalSchemeModFAnalysisTypeLattice(text, allOptimisations) else new IncrementalSchemeModFAnalysisTypeLatticeNoLogging(text, allOptimisations)
-            val b = if logging then new IncrementalSchemeModFAnalysisTypeLattice(text, allOptimisations) else new IncrementalSchemeModFAnalysisTypeLatticeNoLogging(text, allOptimisations)
+            val a =
+                if logging then new IncrementalSchemeModFAnalysisTypeLattice(text, allOptimisations)
+                else new IncrementalSchemeModFAnalysisTypeLatticeNoLogging(text, allOptimisations)
+            val b =
+                if logging then new IncrementalSchemeModFAnalysisTypeLattice(text, allOptimisations)
+                else new IncrementalSchemeModFAnalysisTypeLatticeNoLogging(text, allOptimisations)
 
             import SimpleTimer.*
 
@@ -129,8 +135,7 @@ object IncrementalRun extends App:
             //a.logger.logU("store difference with full reanalysis:\n" ++ storeDiff(a, b)) // Log the difference in stores if any.
             val diff = storeDiff(a, b)
             println(diff)
-            if throwAssertionViolations
-            then
+            if throwAssertionViolations then
                 println(markError(diff))
                 assert(diff.isEmpty)
             diff.isEmpty
@@ -143,31 +148,31 @@ object IncrementalRun extends App:
     def reduceImprecise(text: SchemeExp): SchemeExp = reduce(text, !analyse(_, false, false))
 
     List(
-        // Different results with and without LitAddr.
-        "test/changes/scheme/generated/R5RS_gambit_matrix-1.scm",
-        "test/changes/scheme/generated/R5RS_scp1_draw-umbrella-4.scm",
-        "test/changes/scheme/generated/R5RS_scp1_draw-umbrella-5.scm",
-        "test/changes/scheme/generated/R5RS_scp1_insert-2.scm",
-        "test/changes/scheme/generated/R5RS_scp1_list-compare-n-1.scm",
-        "test/changes/scheme/generated/R5RS_scp1_list-compare-n-3.scm",
-        "test/changes/scheme/generated/R5RS_various_work-1.scm",
-        "test/changes/scheme/generated/R5RS_various_work-3.scm",
+      // Different results with and without LitAddr.
+      "test/changes/scheme/generated/R5RS_gambit_matrix-1.scm",
+      "test/changes/scheme/generated/R5RS_scp1_draw-umbrella-4.scm",
+      "test/changes/scheme/generated/R5RS_scp1_draw-umbrella-5.scm",
+      "test/changes/scheme/generated/R5RS_scp1_insert-2.scm",
+      "test/changes/scheme/generated/R5RS_scp1_list-compare-n-1.scm",
+      "test/changes/scheme/generated/R5RS_scp1_list-compare-n-3.scm",
+      "test/changes/scheme/generated/R5RS_various_work-1.scm",
+      "test/changes/scheme/generated/R5RS_various_work-3.scm",
 
-        // Not precise yet.
-        "test/DEBUG2.scm",
-        "test/changes/scheme/generated/R5RS_WeiChenRompf2019_the-little-schemer_ch3-5.scm",
-        "test/changes/scheme/generated/R5RS_gabriel_puzzle-4.scm",
-        "test/changes/scheme/generated/R5RS_scp1_all-but-interval-5.scm",
-        "test/changes/scheme/generated/R5RS_scp1_count-pairs2-1.scm",
-        "test/changes/scheme/generated/R5RS_scp1_dedouble-2.scm",
-        "test/changes/scheme/generated/R5RS_scp1_deep-map-combine-4.scm",
-        "test/changes/scheme/generated/R5RS_scp1_merge-1.scm",
-        "test/changes/scheme/generated/R5RS_scp1_merge-3.scm",
-        "test/changes/scheme/generated/R5RS_scp1_merge-5.scm",
-        "test/changes/scheme/generated/R5RS_sigscheme_mem-1.scm",
-        "test/changes/scheme/generated/R5RS_various_church-4.scm",
-        "test/changes/scheme/generated/R5RS_various_four-in-a-row-5.scm",
-    ).slice(6,7).foreach { bench =>
+      // Not precise yet.
+      "test/DEBUG2.scm",
+      "test/changes/scheme/generated/R5RS_WeiChenRompf2019_the-little-schemer_ch3-5.scm",
+      "test/changes/scheme/generated/R5RS_gabriel_puzzle-4.scm",
+      "test/changes/scheme/generated/R5RS_scp1_all-but-interval-5.scm",
+      "test/changes/scheme/generated/R5RS_scp1_count-pairs2-1.scm",
+      "test/changes/scheme/generated/R5RS_scp1_dedouble-2.scm",
+      "test/changes/scheme/generated/R5RS_scp1_deep-map-combine-4.scm",
+      "test/changes/scheme/generated/R5RS_scp1_merge-1.scm",
+      "test/changes/scheme/generated/R5RS_scp1_merge-3.scm",
+      "test/changes/scheme/generated/R5RS_scp1_merge-5.scm",
+      "test/changes/scheme/generated/R5RS_sigscheme_mem-1.scm",
+      "test/changes/scheme/generated/R5RS_various_church-4.scm",
+      "test/changes/scheme/generated/R5RS_various_four-in-a-row-5.scm",
+    ).slice(6, 7).foreach { bench =>
         try {
             println(markTask(s"***** $bench *****"))
             val text = CSchemeParser.parseProgram(Reader.loadFile(bench))
