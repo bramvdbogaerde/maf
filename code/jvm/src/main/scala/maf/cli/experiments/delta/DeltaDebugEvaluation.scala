@@ -1,5 +1,6 @@
 package maf.cli.experiments.delta
 
+import maf.util.datastructures.ListOps._
 import java.nio.file.*
 import java.io.{BufferedReader, File, InputStreamReader}
 import java.util.concurrent.*
@@ -23,6 +24,7 @@ import maf.deltaDebugging.treeDD.Reducer
 import maf.deltaDebugging.treeDD.IntermediateReducer
 import maf.deltaDebugging.treeDD.TimedReducer
 import maf.deltaDebugging.treeDD.LambdaOracle
+import maf.util.benchmarks.Table
 
 trait Instrumenter:
     def instrument(program: SchemeExp): SchemeExp
@@ -34,7 +36,7 @@ class ExternalInterpreter(val executableName: String):
     def run(program: SchemeExp, timeoutSeconds: Int): String =
         // Write the file
         val suffix = Random.nextInt.toString
-        println(s"foo$suffix.scm")
+        //println(s"foo$suffix.scm")
         val w = Writer.open(s"/tmp/foo$suffix.scm")
         Writer.write(w, "(define (char->string c) (list->string (list c)))\n(define (assert x) #t)" + program.toString)
         Writer.close(w)
@@ -59,7 +61,7 @@ trait Disagreement:
 
 case class OutputDisagreement(val program: String, val firstOutput: String, val secondOutput: String) extends Disagreement:
     def dump(outDir: String): Unit =
-        println(s"${program}: different output (see $outDir for details)")
+        //println(s"${program}: different output (see $outDir for details)")
         val programName = program.replaceAll("/", "-").nn
         val w1 = Writer.open(s"$outDir/$programName.first")
         Writer.write(w1, firstOutput)
@@ -70,10 +72,10 @@ case class OutputDisagreement(val program: String, val firstOutput: String, val 
 case class TimeoutDisagreement(val program: String, val firstTimesOut: Boolean) extends Disagreement:
     def dump(outDir: String): Unit =
         val desc = if firstTimesOut then "first" else "second"
-        println(s"${program}: ${desc} times out")
+//println(s"${program}: ${desc} times out")
 case class CrashDisagreement(val program: String, val error: String) extends Disagreement:
     def dump(outDir: String): Unit =
-        println(s"${program}: ${error.take(10)} (see $outDir for details)")
+        //println(s"${program}: ${error.take(10)} (see $outDir for details)")
         val programName = program.replaceAll("/", "-").nn
         val w = Writer.open(s"$outDir/$programName.error")
         Writer.writeln(w, error)
@@ -133,9 +135,9 @@ class PrintBasedInterpreterComparison extends InterpreterComparison:
 
     def runInternalInterpreter(program: SchemeExp): Either[Throwable, String] =
         try
-            println("Running internal")
+            //println("Running internal")
             interpreter2.run(program, Timeout.start(Duration(timeoutSeconds, "seconds")))
-            println("Done running internal")
+            //println("Done running internal")
             val output = io.getAndClearOutput()
             val suffix = Random.nextInt.toString
             Writer.dump(s"/tmp/foo$suffix.scm", program.toString)
@@ -147,11 +149,11 @@ class PrintBasedInterpreterComparison extends InterpreterComparison:
                 Left(exc)
 
     def runExternalInterpreter(program: SchemeExp): Either[Throwable, String] =
-        println("Running external")
+        //println("Running external")
         val res =
             try Right(interpreter1.run(program, timeoutSeconds))
             catch case exc: Throwable => Left(exc)
-        println("Done running external")
+        //println("Done running external")
         res
 
     def processOutput(v: String): String =
@@ -274,11 +276,11 @@ object ProgramLoader:
 /** This applies differential testing to two interpreters. Used to find programs which have different interpretation between the two interpreters */
 class DifferentialTesting(comparison: InterpreterComparison, reporter: DifferentialTestingReporter, benchmarks: Set[String]):
     def onBenchmark(name: String): Unit =
-        println(s"Running on $name")
+        //println(s"Running on $name")
         val program = ProgramLoader.loadProgram(name, comparison)
         comparison.differenceOn(name, program) match {
             case Some(disagreement) =>
-                println(s"Disagreement on $name: $disagreement")
+                //println(s"Disagreement on $name: $disagreement")
                 reporter.addDisagreement(disagreement)
             case _ => ()
         }
@@ -313,13 +315,13 @@ class ConsoleDifferentialTestingReporter extends DifferentialTestingReporter:
     override def report(): Unit =
         // println(s"I ran ${benchmarks.size} benchmarks and found ${disagreements.length} disagreements")
         val outputDisagreements = disagreements.filter(_.isInstanceOf[OutputDisagreement])
-        println(s"Output disagreements: ${outputDisagreements.length} (raw outputs in in /tmp/out)")
+        //println(s"Output disagreements: ${outputDisagreements.length} (raw outputs in in /tmp/out)")
         outputDisagreements.foreach(_.dump("/tmp/out/"))
         val timeoutDisagreements = disagreements.filter(_.isInstanceOf[TimeoutDisagreement])
-        println(s"Timeout disagreements: ${timeoutDisagreements.length}")
+        //println(s"Timeout disagreements: ${timeoutDisagreements.length}")
         timeoutDisagreements.foreach(_.dump("/tmp/out/"))
         val crashDisagreements = disagreements.filter(_.isInstanceOf[CrashDisagreement])
-        println(s"Crash disagreements:: ${crashDisagreements.length}")
+        //println(s"Crash disagreements:: ${crashDisagreements.length}")
         crashDisagreements.foreach(_.dump("/tmp/out/"))
 
 // Black-box delta debugging
@@ -338,7 +340,7 @@ abstract class DeltaDebug(comparison: InterpreterComparison):
             case Some(disagreement) =>
                 Writer.dump("/tmp/disagreement.scm", program.toString)
                 disagreement.dump("/tmp/out/")
-                println(s"Disagreement on: ${program.toString().take(100)}: ${disagreement.toString().take(150)}")
+                //println(s"Disagreement on: ${program.toString().take(100)}: ${disagreement.toString().take(150)}")
                 true
             case None =>
                 // println(s"Agreement on: ${program.toString().take(20)}...")
@@ -355,9 +357,9 @@ abstract class DeltaDebug(comparison: InterpreterComparison):
         // val preluded = SchemePrelude.addPrelude(instrumented, incl = Set("assert", "__log"))
         val program = SchemeParser.undefine(parsed)
         val reduced = reduce(program)
-        println(s"========== ${path}")
-        println(reduced)
-        println("GTR total transformation count: " + TransformationManager.allTransformations.map(_.getHits).fold(0)(_ + _))
+    //println(s"========== ${path}")
+    //println(reduced)
+    //println("GTR total transformation count: " + TransformationManager.allTransformations.map(_.getHits).fold(0)(_ + _))
 
     def main(args: Array[String]): Unit =
         benchmarks.foreach(onBenchmark)
@@ -408,7 +410,7 @@ object Interpreter:
         val program = SchemeParser.parse(text)(0)
         interpreter.run(program, Timeout.start(Duration(timeoutSeconds, "seconds")))
         val output = io.getAndClearOutput()
-        println(output)
+///println(output)
 
 case class ReductionData(
     benchmark: String,
@@ -435,17 +437,17 @@ trait ComparisonReducer extends Reducer[SchemeExp]:
         val programToRun = SchemeParser.undefine(preluded)
         // If we introduced any undefined variables (e.g., by removing a def), this will not work so we skip this one
         // TODO if !programToRun.findUndefinedVariables().isEmpty then return false
-        println("Computing difference")
+        //println("Computing difference")
         val res = comparison.differenceOn("foo", programToRun) match
             case Some(disagreement) =>
                 // Writer.dump("/tmp/disagreement.scm", program.toString)
                 // disagreement.dump("/tmp/out/")
                 // println(s"Disagreement on: ${program.toString().take(100)}: ${disagreement.toString().take(150)}")
-                println(s"Disagreement on program of size ${program.size} (${program.toString().take(100)}): ${disagreement.toString().take(100)}")
+                //println(s"Disagreement on program of size ${program.size} (${program.toString().take(100)}): ${disagreement.toString().take(100)}")
                 true
             case None =>
                 false
-        println("Done computing differences")
+        //println("Done computing differences")
         res
     }
 
@@ -454,7 +456,8 @@ trait EvalStrategy(val comparison: PrintBasedInterpreterComparison)
       ComparisonReducer,
       TimedReducer[SchemeExp],
       IntermediateReducer[SchemeExp]:
-    def eval(program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit): ReductionData =
+
+    def eval(program: SchemeExp, name: String): ReductionData =
         val startTime = System.currentTimeMillis()
 
         val reduced = reduce()
@@ -510,22 +513,22 @@ class RemoveExpensiveFunctionsEval(tree: SchemeExp, comparison: PrintBasedInterp
         val programToRun = SchemeParser.undefine(preluded)
         comparison.interpreter2.run(programToRun, Timeout.start(Duration(timeoutSeconds, "seconds")))
 
-    override def reduce() = {
+    override def reduceSingle(program: SchemeExp) = {
         // TODO: count time spent in preprocessing step
-        println("Removing lambdas...")
+        //println("Removing lambdas...")
         run(comparison, tree)
-        val preprocessed = preprocess(comparison, tree, comparison.interpreter2.stepsSpent)
+        val preprocessed = preprocess(comparison, program, comparison.interpreter2.stepsSpent)
         println("-----> Done preprocessing")
-        super.reduce(preprocessed)
+        super.reduceSingle(preprocessed)
     }
 
     def preprocess(comparison: PrintBasedInterpreterComparison, program: SchemeExp, stepsSpent: Map[SchemeLambda, Int]): SchemeExp = {
         // TODO: we don't want to remove lambdas that are part of the prelude...
         val toRemove = stepsSpent.toList.sortBy(kv => -kv._2)
-        println(program)
-        println(s"To remove: ${toRemove.size}")
+        //println(program)
+        //println(s"To remove: ${toRemove.size}")
         for (lambda <- toRemove) {
-            println(s"Removing ${lambda._1.name.get.toString().take(100)}")
+            //println(s"Removing ${lambda._1.name.get.toString().take(100)}")
             val res = removeLambda(comparison, program, lambda._1)
             if res.isDefined then
                 // One lambda could be removed, continue removing the other ones
@@ -543,23 +546,23 @@ class RemoveExpensiveFunctionsEval(tree: SchemeExp, comparison: PrintBasedInterp
             // TODO: the source of the problem seems to be in deleteChildren here, the lambda is not found!
             val programWithoutLambda = program
                 .deleteChildren(exp =>
-                    println(exp)
-                    println(lambda)
-                    if exp eq lambda then println("FOUND")
+                    //println(exp)
+                    //println(lambda)
+                    if exp eq lambda then () //println("FOUND")
                     exp == lambda
                 )
                 .get
             val undefinedVariables: Set[String] = programWithoutLambda.findUndefinedVariables().map(_.name).toSet
             if !((undefinedVariables -- SchemePrelude.primDefs.keySet).isEmpty) then
-                println(program)
-                println(s"Undefined variables: ${programWithoutLambda.findUndefinedVariables()}")
+                //println(program)
+                //println(s"Undefined variables: ${programWithoutLambda.findUndefinedVariables()}")
                 return None
-            println(programWithoutLambda)
+            //println(programWithoutLambda)
             run(comparison, programWithoutLambda)
-            println(s"Removed safely ${lambda.toString().take(100)}")
+            //println(s"Removed safely ${lambda.toString().take(100)}")
             Some((programWithoutLambda, comparison.interpreter2.stepsSpent))
         catch _ =>
-            println("Unable to remove it")
+            //println("Unable to remove it")
             None // Execution failed, this one can't be removed
     }
 
@@ -639,16 +642,35 @@ object Perses:
     def main(args: Array[String]): Unit =
         testFile("test/R5RS/various/grid.scm")
 
+/** The evaluation combines strategies with benchmark programs and writes the results ot a single CSV file */
 object Evaluation:
+    case class EvaluationResult(strategyName: String, benchmarkName: String, result: ReductionData):
+        private val rowName: String = strategyName + ":" + benchmarkName
+        def addToTable(table: Table[String]): Table[String] =
+            table
+                .add(rowName, "origSize", result.origSize.toString)
+                .add(rowName, "reducedSize", result.reducedSize.toString)
+                .add(rowName, "reductionPercentage", result.reductionPercentage.toString)
+                .add(rowName, "reductionTime", result.reductionTime.toString)
+                .add(rowName, "oracleInvocations", result.oracleInvocations.toString)
+                .add(rowName, "oracleEvolution", result.oracleEvolution.map(_.toString).mkString(":"))
+                .add(rowName, "sizeEvolution", result.sizeEvolution.map(_.toString).mkString(":"))
+
+    val strategies: List[(SchemeExp, InstrumentationBasedInterpreterComparison) => EvalStrategy] = List(
+      OrderedSchemeReduceEval.apply,
+      CountingSchemeReduceEval.apply,
+      //RemoveExpensiveFunctionsEval.apply
+    )
+
     val benchmarks: Set[String] = Set(
       // These are all the ones that yield differences worth investigating
       // Different order of evaluation of let bindings?
       "test/R5RS/gabriel/dderiv.scm", // (let ((arg ((lambda unique_args_382 #f) 5 '())) (result ((lambda unique_args_374 '()) 0 '()))) (equal? '() result))
-      // "test/R5RS/scp1/cashdesk-counter.scm", // (letrec ((teller ((lambda unique_args_295 #f))) (_0 ((lambda unique_args_287 '()) 'toets)) (_3 teller)) '())
-      // "test/R5RS/scp1/twitter.scm", // (letrec ((res1 ((lambda unique_args_463 #f) 'username)) (_0 ((lambda unique_args_455 '()) 'output)) (_6 res1)) '())
+      "test/R5RS/scp1/cashdesk-counter.scm", // (letrec ((teller ((lambda unique_args_295 #f))) (_0 ((lambda unique_args_287 '()) 'toets)) (_3 teller)) '())
+      "test/R5RS/scp1/twitter.scm", // (letrec ((res1 ((lambda unique_args_463 #f) 'username)) (_0 ((lambda unique_args_455 '()) 'output)) (_6 res1)) '())
       //
       // Bug: (eq?) and (eq? x) are valid in guile, but not in MAF. It's guile that deviates from R5RS
-      // "test/R5RS/various/values.scm", // (letrec ((string->number eq?) (_1 (string->number))) '())
+      "test/R5RS/various/values.scm", // (letrec ((string->number eq?) (_1 (string->number))) '())
       //
       // Bug: letrec can reference later bindings in the same letrec, does not work in MAF
       // It's actually guile that violates R5RS, as it states: "One restriction on letrec is very important: it must be possible to evaluate each <init> without assigning or referring to the value of any <variable>. If this restriction is violated, then it is an error. The restriction is necessary because Scheme passes arguments by value rather than by name. In the most common uses of letrec, all the <init>s are lambda expressions and the restriction is satisfied automatically. "
@@ -668,20 +690,23 @@ object Evaluation:
       //
     )
 
-    val comparison = new InstrumentationBasedInterpreterComparison
-    def onBenchmark(path: String): Unit =
-        println(s"Running on $path")
+    def onBenchmark(path: String, strategy: (SchemeExp, InstrumentationBasedInterpreterComparison) => EvalStrategy): EvaluationResult =
         val content = Reader.loadFile(path)
         val parsed = SchemeParser.parse(content)
         val program = SchemeParser.undefine(parsed)
-        // OrderedSchemeReduceEval.eval(comparison, program, path).dump()
-        // CountingSchemeReduceEval.eval(comparison, program, path).dump()
-        //RemoveExpensiveFunctionsEval.eval(comparison, program, path, (_, _) => ()).dump()
-        ???
+        val comparison = new InstrumentationBasedInterpreterComparison
+        val s = strategy(program, comparison)
+        val strategyName = s.getClass.nn.getName.nn
+        println(s"Running on $path with strategy $strategyName")
+        val result = s.eval(program, path)
+        EvaluationResult(strategyName, path, result)
 
     // TODO: useful from Turgut's code: check that there are no undefined variables in a program (but maybe before running it rather than after!)
     // p.findUndefinedVariables().isEmpty
     // TODO: extend countingDD to also count steps spent in each function (mimic call stack)
 
     def main(args: Array[String]): Unit =
-        benchmarks.foreach(onBenchmark)
+        val results = benchmarks.toList.cartesian(strategies).map(onBenchmark.tupled)
+        val table = results.foldLeft(Table.empty[String])((table, result) => result.addToTable(table))
+        val w = Writer.openTimeStamped("output/results.csv")
+        Writer.write(w, table.toCSVString())

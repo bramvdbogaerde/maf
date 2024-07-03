@@ -18,9 +18,7 @@ abstract class Reducer[E](originalTree: E):
     /** Reduce the original Scheme expression according to the given oracle */
     def reduce(): E = reduce(originalTree)
 
-/**
- * Implements <code>invokeOracle</code> as an invocation of the given lambda
- */
+/** Implements <code>invokeOracle</code> as an invocation of the given lambda */
 trait LambdaOracle[E](oracle: Oracle[E]) extends Reducer[E]:
     override protected def invokeOracle(e: E): Boolean = oracle(e)
 
