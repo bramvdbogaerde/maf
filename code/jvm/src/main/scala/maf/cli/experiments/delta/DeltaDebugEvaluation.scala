@@ -406,12 +406,14 @@ object Interpreter:
         println(output)
 
 case class ReductionData(
-    val benchmark: String,
-    val origSize: Int,
-    val reducedSize: Int,
-    val reductionPercentage: Double,
-    val reductionTime: Long,
-    val oracleInvocations: Int):
+    benchmark: String,
+    origSize: Int,
+    reducedSize: Int,
+    reductionPercentage: Double,
+    reductionTime: Long,
+    oracleInvocations: Int,
+    oracleEvolution: List[Double],
+    sizeEvolution: List[Int]):
     def dump(): Unit =
         println(
           s"Reduction on ${benchmark} of size ${origSize}, reduced to ${reducedSize} (${reductionPercentage * 100}%) in ${reductionTime / 1e3}s with ${oracleInvocations} invocations"
@@ -445,15 +447,15 @@ abstract class EvalStrategy:
         res
     }
 
-    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String): SchemeExp
+    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit): SchemeExp
 
-    def eval(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String): ReductionData =
+    def eval(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit): ReductionData =
         // TODO: warmup + multiple iterations, add statistics to ReductionData (or use one of the helper classes for that)
         oracleInvocations = 0
 
         val startTime = System.currentTimeMillis()
 
-        val reduced = reduce(comparison, program, name)
+        val reduced = reduce(comparison, program, name, cb)
         println(reduced)
         val endTime = System.currentTimeMillis()
         val totalReductionTime = endTime - startTime
@@ -465,10 +467,12 @@ abstract class EvalStrategy:
           reductionTime = totalReductionTime,
           reductionPercentage = 1 - (reduced.size.toDouble / program.size),
           oracleInvocations = oracleInvocations,
+          oracleEvolution = List(),
+          sizeEvolution = List()
         )
 
 object GTREval extends EvalStrategy:
-    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String) =
+    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit) =
         GTR.reduce(
           program,
           oracle(comparison),
@@ -476,7 +480,7 @@ object GTREval extends EvalStrategy:
         )
 
 object SchemeReduceEval extends EvalStrategy:
-    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String) =
+    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit) =
         SchemeReduce.reduce(
           program,
           oracle(comparison),
@@ -485,7 +489,7 @@ object SchemeReduceEval extends EvalStrategy:
         )
 
 class OrderedSchemeReduceEval extends EvalStrategy:
-    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String) =
+    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit) =
         SchemeReduce.reduce(
           program,
           oracle(comparison),
@@ -497,7 +501,7 @@ class OrderedSchemeReduceEval extends EvalStrategy:
 object OrderedSchemeReduceEval extends OrderedSchemeReduceEval
 
 object LayeredSchemeReduceEval extends EvalStrategy:
-    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String) =
+    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit) =
         LayeredSchemeReduce.reduce(
           program,
           oracle(comparison),
@@ -509,7 +513,7 @@ object LayeredSchemeReduceEval extends EvalStrategy:
 
 // Uses OrderedSchemeReduce + counting interpreter
 object CountingSchemeReduceEval extends EvalStrategy:
-    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String) =
+    def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit) =
         SchemeReduce.reduce(
           program,
           p => {
@@ -531,13 +535,13 @@ object RemoveExpensiveFunctionsEval extends OrderedSchemeReduceEval:
         val programToRun = SchemeParser.undefine(preluded)
         comparison.interpreter2.run(programToRun, Timeout.start(Duration(timeoutSeconds, "seconds")))
 
-    override def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String) = {
+    override def reduce(comparison: PrintBasedInterpreterComparison, program: SchemeExp, name: String, cb: (SchemeExp, Double) => Unit) = {
         // TODO: count time spent in preprocessing step
         println("Removing lambdas...")
         run(comparison, program)
         val preprocessed = preprocess(comparison, program, comparison.interpreter2.stepsSpent)
         println("-----> Done preprocessing")
-        super.reduce(comparison, preprocessed, name)
+        super.reduce(comparison, preprocessed, name, cb)
     }
 
     def preprocess(comparison: PrintBasedInterpreterComparison, program: SchemeExp, stepsSpent: Map[SchemeLambda, Int]): SchemeExp = {
@@ -637,7 +641,7 @@ object Perses:
 
         val cmd = Seq(
           "java",
-          "-jar" PERSES_PATH_JAR,
+          "-jar" + PERSES_PATH_JAR,
           "--input-file",
           File(tempPath + "/program.rkt").getAbsolutePath().nn,
           "--test-script",
@@ -697,7 +701,7 @@ object Evaluation:
         val program = SchemeParser.undefine(parsed)
         // OrderedSchemeReduceEval.eval(comparison, program, path).dump()
         // CountingSchemeReduceEval.eval(comparison, program, path).dump()
-        RemoveExpensiveFunctionsEval.eval(comparison, program, path).dump()
+        RemoveExpensiveFunctionsEval.eval(comparison, program, path, (_, _) => ()).dump()
 
     // TODO: useful from Turgut's code: check that there are no undefined variables in a program (but maybe before running it rather than after!)
     // p.findUndefinedVariables().isEmpty
