@@ -644,8 +644,8 @@ object Perses:
 
 /** The evaluation combines strategies with benchmark programs and writes the results ot a single CSV file */
 object Evaluation:
-    case class EvaluationResult(strategyName: String, benchmarkName: String, result: ReductionData):
-        private val rowName: String = strategyName + ":" + benchmarkName
+    case class EvaluationResult(strategyName: String, benchmarkName: String, result: ReductionData, nth: Int):
+        private val rowName: String = strategyName + ":" + benchmarkName + ":" + nth
         def addToTable(table: Table[String]): Table[String] =
             table
                 .add(rowName, "origSize", result.origSize.toString)
@@ -677,11 +677,11 @@ object Evaluation:
       /// "test/R5RS/WeiChenRompf2019/rsa.scm", // (letrec ((is-legal-public-exponent? e) (e 7)) '())
       //
       // Same bug: guile allows circular bindings, e.g., (letrec ((_0 _0)) _0), where _0 will have an unspecified value.
-      // "test/R5RS/scp1/parking-counter.scm",
-      // "test/R5RS/scp1/tree-with-branches.scm",
-      // "test/R5RS/various/eta.scm",
-      // "test/R5RS/various/four-in-a-row.scm",
-      // "test/R5RS/various/grid.scm",
+      "test/R5RS/scp1/parking-counter.scm",
+      "test/R5RS/scp1/tree-with-branches.scm",
+      "test/R5RS/various/eta.scm",
+      "test/R5RS/various/four-in-a-row.scm",
+      "test/R5RS/various/grid.scm",
 
       // The rest are due to either IO input (cat, wc, tail), or fractions (calc-e-and-cos, simpson-integral, third-root)
       // Note that there are some high variations due to missing fractions in MAF! For example on simpson-integral
@@ -690,23 +690,27 @@ object Evaluation:
       //
     )
 
-    def onBenchmark(path: String, strategy: (SchemeExp, InstrumentationBasedInterpreterComparison) => EvalStrategy): EvaluationResult =
-        val content = Reader.loadFile(path)
-        val parsed = SchemeParser.parse(content)
-        val program = SchemeParser.undefine(parsed)
-        val comparison = new InstrumentationBasedInterpreterComparison
-        val s = strategy(program, comparison)
-        val strategyName = s.getClass.nn.getName.nn
-        println(s"Running on $path with strategy $strategyName")
-        val result = s.eval(program, path)
-        EvaluationResult(strategyName, path, result)
+    def onBenchmark(path: String, strategy: (SchemeExp, InstrumentationBasedInterpreterComparison) => EvalStrategy): List[EvaluationResult] =
+        (0 to 20)
+            .map((nth) => {
+                val content = Reader.loadFile(path)
+                val parsed = SchemeParser.parse(content)
+                val program = SchemeParser.undefine(parsed)
+                val comparison = new InstrumentationBasedInterpreterComparison
+                val s = strategy(program, comparison)
+                val strategyName = s.getClass.nn.getName.nn
+                println(s"Running on $path with strategy $strategyName")
+                val result = s.eval(program, path)
+                EvaluationResult(strategyName, path, result, nth)
+            })
+            .toList
 
     // TODO: useful from Turgut's code: check that there are no undefined variables in a program (but maybe before running it rather than after!)
     // p.findUndefinedVariables().isEmpty
     // TODO: extend countingDD to also count steps spent in each function (mimic call stack)
 
     def main(args: Array[String]): Unit =
-        val results = benchmarks.toList.cartesian(strategies).map(onBenchmark.tupled)
+        val results = benchmarks.toList.cartesian(strategies).flatMap(onBenchmark.tupled)
         val table = results.foldLeft(Table.empty[String])((table, result) => result.addToTable(table))
         val w = Writer.openTimeStamped("output/results.csv")
         Writer.write(w, table.toCSVString())
