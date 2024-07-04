@@ -47,6 +47,10 @@ trait TimedReducer[E] extends Reducer[E]:
 trait IntermediateReducer[E] extends Reducer[E]:
     var expressionEvolution: List[E] = List()
 
+    abstract override def reduce(e: E): E =
+        expressionEvolution = e :: expressionEvolution
+        super.reduce(e)
+
     abstract override def reduceSingle(currentTree: E): E =
         val e = super.reduceSingle(currentTree)
         expressionEvolution = e :: expressionEvolution

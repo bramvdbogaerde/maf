@@ -473,8 +473,8 @@ trait EvalStrategy(val comparison: PrintBasedInterpreterComparison)
           reductionTime = totalReductionTime,
           reductionPercentage = 1 - (reduced.size.toDouble / program.size),
           oracleInvocations = oracleEvolution.size,
-          oracleEvolution = oracleEvolution,
-          sizeEvolution = expressionEvolution.map(_.size)
+          oracleEvolution = oracleEvolution.reverse,
+          sizeEvolution = expressionEvolution.map(_.size).reverse
         )
 
 class GTREval(program: SchemeExp, comparison: PrintBasedInterpreterComparison)
@@ -514,14 +514,18 @@ class RemoveExpensiveFunctionsEval(tree: SchemeExp, comparison: PrintBasedInterp
         val programToRun = SchemeParser.undefine(preluded)
         comparison.interpreter2.run(programToRun, Timeout.start(Duration(timeoutSeconds, "seconds")))
 
-    override def reduceSingle(program: SchemeExp) = {
+    override def reduce(program: SchemeExp) = {
         // TODO: count time spent in preprocessing step
         // println("Removing lambdas...")
-        run(comparison, program)
-        // println("Program executed successfully")
-        val preprocessed = preprocess(comparison, program, comparison.interpreter2.stepsSpent)
-        // println("-----> Done preprocessing")
-        super.reduceSingle(preprocessed)
+        val preprocessed =
+            try
+                run(comparison, program)
+                // println("Program executed successfully")
+                preprocess(comparison, program, comparison.interpreter2.stepsSpent)
+            // println("-----> Done preprocessing")
+            catch { case _ => program }
+
+        super.reduce(preprocessed)
     }
 
     def preprocess(comparison: PrintBasedInterpreterComparison, program: SchemeExp, stepsSpent: Map[SchemeLambda, Int]): SchemeExp = {
@@ -653,7 +657,7 @@ object Perses:
 
 /** The evaluation combines strategies with benchmark programs and writes the results ot a single CSV file */
 object Evaluation:
-    val REPEAT_BENCHMARK_TIMES = 0
+    val REPEAT_BENCHMARK_TIMES = 10
 
     case class EvaluationResult(strategyName: String, benchmarkName: String, result: ReductionData, nth: Int):
         private val rowName: String = strategyName + ":" + benchmarkName + ":" + nth
