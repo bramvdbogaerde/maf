@@ -25,6 +25,7 @@ import maf.deltaDebugging.treeDD.IntermediateReducer
 import maf.deltaDebugging.treeDD.TimedReducer
 import maf.deltaDebugging.treeDD.LambdaOracle
 import maf.util.benchmarks.Table
+import maf.deltaDebugging.treeDD.transformations.traits.Replacing
 
 trait Instrumenter:
     def instrument(program: SchemeExp): SchemeExp
@@ -515,54 +516,62 @@ class RemoveExpensiveFunctionsEval(tree: SchemeExp, comparison: PrintBasedInterp
 
     override def reduceSingle(program: SchemeExp) = {
         // TODO: count time spent in preprocessing step
-        //println("Removing lambdas...")
-        run(comparison, tree)
+        // println("Removing lambdas...")
+        run(comparison, program)
+        // println("Program executed successfully")
         val preprocessed = preprocess(comparison, program, comparison.interpreter2.stepsSpent)
-        println("-----> Done preprocessing")
+        // println("-----> Done preprocessing")
         super.reduceSingle(preprocessed)
     }
 
     def preprocess(comparison: PrintBasedInterpreterComparison, program: SchemeExp, stepsSpent: Map[SchemeLambda, Int]): SchemeExp = {
-        // TODO: we don't want to remove lambdas that are part of the prelude...
         val toRemove = stepsSpent.toList.sortBy(kv => -kv._2)
-        //println(program)
+        // println(program)
         //println(s"To remove: ${toRemove.size}")
+        var reducedProgram = program
         for (lambda <- toRemove) {
-            //println(s"Removing ${lambda._1.name.get.toString().take(100)}")
-            val res = removeLambda(comparison, program, lambda._1)
-            if res.isDefined then
-                // One lambda could be removed, continue removing the other ones
-                return preprocess(comparison, res.get._1, res.get._2)
+            // println(s"Removing ${lambda._1.name.get.toString().take(100)}")
+            removeLambda(comparison, reducedProgram, lambda._1) match
+                case Some(p) => reducedProgram = p
+                case _       => ()
         }
-        program // Nothing could be removed
+        println(s"[expensive-functions] Program original size: ${program.size}, reduced size ${reducedProgram.size}")
+        reducedProgram
     }
 
     def removeLambda(
         comparison: PrintBasedInterpreterComparison,
         program: SchemeExp,
         lambda: SchemeLambda
-      ): Option[(SchemeExp, Map[SchemeLambda, Int])] = {
+      ): Option[SchemeExp] = {
         try
-            // TODO: the source of the problem seems to be in deleteChildren here, the lambda is not found!
-            val programWithoutLambda = program
-                .deleteChildren(exp =>
-                    //println(exp)
-                    //println(lambda)
-                    if exp eq lambda then () //println("FOUND")
-                    exp == lambda
+            // Try removing the lambda, this will also removing any bindings
+            // in let expressions for those lambda's
+            val programWithoutLambda = program.deleteChildren {
+                case exp @ SchemeLambda(_, _, _, _, idn) =>
+                    exp.idn == lambda.idn
+                case _ => false
+            }.get
+
+            // Now try to delete all calls to the now undefined function
+            // TODO: does this transformation take scoping into account?
+            val candidates = Replacing
+                .replaceWithAllValues(programWithoutLambda,
+                                      {
+                                          case SchemeFuncall(f: SchemeVarExp, _, _) =>
+                                              lambda.name.map(_ == f.id.name).getOrElse(false)
+                                          case _ => false
+                                      }
                 )
-                .get
-            val undefinedVariables: Set[String] = programWithoutLambda.findUndefinedVariables().map(_.name).toSet
-            if !((undefinedVariables -- SchemePrelude.primDefs.keySet).isEmpty) then
-                //println(program)
-                //println(s"Undefined variables: ${programWithoutLambda.findUndefinedVariables()}")
-                return None
-            //println(programWithoutLambda)
-            run(comparison, programWithoutLambda)
-            //println(s"Removed safely ${lambda.toString().take(100)}")
-            Some((programWithoutLambda, comparison.interpreter2.stepsSpent))
+
+            // use only those programs that have no undefined variagbles
+            // and invoke the oracle on them to find a suitable candidate
+            candidates
+                .filter(c => (c.findUndefinedVariables().map(_.name).toSet -- SchemePrelude.primDefs.keySet).isEmpty)
+                .find(invokeOracle)
+
         catch _ =>
-            //println("Unable to remove it")
+            println("Unable to remove it")
             None // Execution failed, this one can't be removed
     }
 
@@ -644,6 +653,8 @@ object Perses:
 
 /** The evaluation combines strategies with benchmark programs and writes the results ot a single CSV file */
 object Evaluation:
+    val REPEAT_BENCHMARK_TIMES = 0
+
     case class EvaluationResult(strategyName: String, benchmarkName: String, result: ReductionData, nth: Int):
         private val rowName: String = strategyName + ":" + benchmarkName + ":" + nth
         def addToTable(table: Table[String]): Table[String] =
@@ -659,7 +670,7 @@ object Evaluation:
     val strategies: List[(SchemeExp, InstrumentationBasedInterpreterComparison) => EvalStrategy] = List(
       OrderedSchemeReduceEval.apply,
       CountingSchemeReduceEval.apply,
-      //RemoveExpensiveFunctionsEval.apply
+      RemoveExpensiveFunctionsEval.apply
     )
 
     val benchmarks: Set[String] = Set(
@@ -691,7 +702,7 @@ object Evaluation:
     )
 
     def onBenchmark(path: String, strategy: (SchemeExp, InstrumentationBasedInterpreterComparison) => EvalStrategy): List[EvaluationResult] =
-        (0 to 20)
+        (0 to REPEAT_BENCHMARK_TIMES)
             .map((nth) => {
                 val content = Reader.loadFile(path)
                 val parsed = SchemeParser.parse(content)
