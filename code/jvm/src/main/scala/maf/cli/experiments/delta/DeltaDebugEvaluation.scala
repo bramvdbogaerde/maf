@@ -429,6 +429,9 @@ case class ReductionData(
 
 trait ComparisonReducer extends Reducer[SchemeExp]:
     val comparison: PrintBasedInterpreterComparison
+    protected def hasDifferenceOn(programName: String, program: SchemeExp): Option[Disagreement] =
+        comparison.differenceOn(programName, program)
+
     def invokeOracle(program: SchemeExp): Boolean = {
         // We don't want the delta debugger to consider the instrumented program,
         // but only use instrumentation for comparison, hence we need to instrument now and not earlier.
@@ -439,17 +442,7 @@ trait ComparisonReducer extends Reducer[SchemeExp]:
         // If we introduced any undefined variables (e.g., by removing a def), this will not work so we skip this one
         // TODO if !programToRun.findUndefinedVariables().isEmpty then return false
         //println("Computing difference")
-        val res = comparison.differenceOn("foo", programToRun) match
-            case Some(disagreement) =>
-                // Writer.dump("/tmp/disagreement.scm", program.toString)
-                // disagreement.dump("/tmp/out/")
-                // println(s"Disagreement on: ${program.toString().take(100)}: ${disagreement.toString().take(150)}")
-                //println(s"Disagreement on program of size ${program.size} (${program.toString().take(100)}): ${disagreement.toString().take(100)}")
-                true
-            case None =>
-                false
-        //println("Done computing differences")
-        res
+        this.hasDifferenceOn("foo", programToRun).isDefined
     }
 
 trait EvalStrategy(val comparison: PrintBasedInterpreterComparison)
@@ -495,6 +488,14 @@ class LayeredSchemeReduceEval(tree: SchemeExp, comparison: PrintBasedInterpreter
     with EvalStrategy(comparison)
 
 trait CountingOracle extends ComparisonReducer:
+    override protected def hasDifferenceOn(programName: String, program: SchemeExp) =
+        // We ignore timeout disagreements since we deliberately made
+        // the interpreter timeout.
+        // TODO: still compare outputs if there is a timeout disagreement?
+        val disagreement = super.hasDifferenceOn(programName, program)
+        disagreement match
+            case Some(TimeoutDisagreement(_, _)) => None
+            case _                               => disagreement
     override def invokeOracle(program: SchemeExp): Boolean =
         val result = super.invokeOracle(program)
         if result then comparison.interpreter2.maxEvalSteps = comparison.interpreter2.getEvalSteps()
@@ -508,6 +509,13 @@ class CountingSchemeReduceEval(tree: SchemeExp, comparison: PrintBasedInterprete
 
 class RemoveExpensiveFunctionsEval(tree: SchemeExp, comparison: PrintBasedInterpreterComparison) extends OrderedSchemeReduceEval(tree, comparison):
     val timeoutSeconds = 30
+
+    /** Number of expensive functions to remove (max) */
+    private val numberToRemove = 5
+
+    /** Number of candidates to consider for each function (max) */
+    private val numberOfCandidates = 3
+
     def run(comparison: PrintBasedInterpreterComparison, program: SchemeExp): Unit =
         val instrumented = comparison.instrument(program)
         val preluded = SchemePrelude.addPrelude(List(instrumented), incl = Set("assert", "__log", "*seed*", "random"))
@@ -529,7 +537,7 @@ class RemoveExpensiveFunctionsEval(tree: SchemeExp, comparison: PrintBasedInterp
     }
 
     def preprocess(comparison: PrintBasedInterpreterComparison, program: SchemeExp, stepsSpent: Map[SchemeLambda, Int]): SchemeExp = {
-        val toRemove = stepsSpent.toList.sortBy(kv => -kv._2)
+        val toRemove = stepsSpent.toList.sortBy(kv => -kv._2).take(numberToRemove)
         // println(program)
         //println(s"To remove: ${toRemove.size}")
         var reducedProgram = program
@@ -572,6 +580,7 @@ class RemoveExpensiveFunctionsEval(tree: SchemeExp, comparison: PrintBasedInterp
             // and invoke the oracle on them to find a suitable candidate
             candidates
                 .filter(c => (c.findUndefinedVariables().map(_.name).toSet -- SchemePrelude.primDefs.keySet).isEmpty)
+                .take(numberOfCandidates)
                 .find(invokeOracle)
 
         catch _ =>
