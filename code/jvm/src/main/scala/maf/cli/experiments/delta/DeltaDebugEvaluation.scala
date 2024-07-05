@@ -1,5 +1,6 @@
 package maf.cli.experiments.delta
 
+import maf.util.benchmarks.Timer
 import maf.util.datastructures.ListOps._
 import java.nio.file.*
 import java.io.{BufferedReader, File, InputStreamReader}
@@ -432,17 +433,26 @@ trait ComparisonReducer extends Reducer[SchemeExp]:
     protected def hasDifferenceOn(programName: String, program: SchemeExp): Option[Disagreement] =
         comparison.differenceOn(programName, program)
 
+    private var cache: Map[SchemeExp, Boolean] = Map()
+
+    def inCache(exp: SchemeExp)(blk: => Boolean): Boolean =
+        val r = cache.get(exp).getOrElse(blk)
+        cache = cache + (exp -> r)
+        r
+
     def invokeOracle(program: SchemeExp): Boolean = {
-        // We don't want the delta debugger to consider the instrumented program,
-        // but only use instrumentation for comparison, hence we need to instrument now and not earlier.
-        // (We could instrument earlier, but we could then remove parts of the instrumentation and have odd results, possibly
-        val instrumented = comparison.instrument(program)
-        val preluded = SchemePrelude.addPrelude(List(instrumented), incl = Set("assert", "__log", "*seed*", "random"))
-        val programToRun = SchemeParser.undefine(preluded)
-        // If we introduced any undefined variables (e.g., by removing a def), this will not work so we skip this one
-        // TODO if !programToRun.findUndefinedVariables().isEmpty then return false
-        //println("Computing difference")
-        this.hasDifferenceOn("foo", programToRun).isDefined
+        inCache(program) {
+            // We don't want the delta debugger to consider the instrumented program,
+            // but only use instrumentation for comparison, hence we need to instrument now and not earlier.
+            // (We could instrument earlier, but we could then remove parts of the instrumentation and have odd results, possibly
+            val instrumented = comparison.instrument(program)
+            val preluded = SchemePrelude.addPrelude(List(instrumented), incl = Set("assert", "__log", "*seed*", "random"))
+            val programToRun = SchemeParser.undefine(preluded)
+            // If we introduced any undefined variables (e.g., by removing a def), this will not work so we skip this one
+            // TODO if !programToRun.findUndefinedVariables().isEmpty then return false
+            //println("Computing difference")
+            this.hasDifferenceOn("foo", programToRun).isDefined
+        }
     }
 
 trait EvalStrategy(val comparison: PrintBasedInterpreterComparison)
@@ -618,7 +628,13 @@ object Perses:
     |java -jar ${TEST_SCRIPT_JAR}
     """.stripMargin
 
-    def testFile(filename: String): Unit =
+    /** Parses the file, runs the undefined over it and outputs the resulting tree as a string */
+    def parseUndefine(path: String): SchemeExp =
+        val content = Reader.loadFile(path)
+        val parsed = SchemeParser.parse(content)
+        SchemeParser.undefine(parsed)
+
+    def testFile(filename: String, nth: Int): Evaluation.EvaluationResult =
         import scala.sys.process._
 
         // output path for perses
@@ -628,11 +644,14 @@ object Perses:
         val tempPath = "out/workdir-" + Clock.nowStr()
         Files.createDirectories(Paths.get(tempPath))
         val propPath = tempPath + "/r.sh"
-        // copy the file to benchmark to the tempPath
-        FileOps.copy(filename, tempPath + "/program.rkt")
+        // Run the undefiner on the file and write to tempPath
+        val contents = parseUndefine(filename)
+        var w = Writer.open(tempPath + "/program.rkt")
+        Writer.write(w, contents.toString)
+        Writer.close(w)
 
         // copy the test script to the working directory
-        val w = Writer.open(tempPath + "/r.sh")
+        w = Writer.open(tempPath + "/r.sh")
         Writer.write(w, testScript)
         Writer.close(w)
 
@@ -641,7 +660,8 @@ object Perses:
 
         val cmd = Seq(
           "java",
-          "-jar" + PERSES_PATH_JAR,
+          "-jar",
+          PERSES_PATH_JAR,
           "--input-file",
           File(tempPath + "/program.rkt").getAbsolutePath().nn,
           "--test-script",
@@ -653,20 +673,60 @@ object Perses:
           "--progress-dump-file",
           "output.dump",
           "--threads",
-          Runtime.getRuntime().nn.availableProcessors().toString(),
+          "1",
+          "--maf-dump-file",
+          File(outputPath + "/stats.csv").getAbsolutePath().nn,
           //"--alg",
           //"ddmin"
         )
         println(cmd)
 
-        println(Process(cmd, new File(tempPath)).!!)
+        val output = Process(cmd, new File(tempPath)).!!
+
+        // read and parse program from output directory
+        val outputProgram = parseUndefine(outputPath + "/program.rkt")
+
+        // parse the output statistics
+        val outstats: List[String] = Reader.loadFile(outputPath + "/stats.csv").strip.nn.split(";").nn.map(_.nn).toList
+        val oracleInvocations = outstats(1).toInt
+        val reductionTime = outstats(2).toLong
+        val oracleEvolution = outstats(3).split(":").nn.toList.map(_.nn.toLong)
+
+        val d = ReductionData(
+          benchmark = filename,
+          origSize = contents.size,
+          reducedSize = outputProgram.size,
+          reductionPercentage = outputProgram.size / contents.size,
+          reductionTime = reductionTime,
+          oracleInvocations = oracleInvocations,
+          oracleEvolution = oracleEvolution,
+          sizeEvolution = List()
+        )
+
+        Evaluation.EvaluationResult("perses", filename, d, nth)
 
     def main(args: Array[String]): Unit =
-        testFile("test/R5RS/various/grid.scm")
+        val results: List[Evaluation.EvaluationResult] = Evaluation.benchmarks.toList.flatMap(benchmark => {
+            try
+                println(s"Running perses on $benchmark")
+                val r = testFile(benchmark, 0)
+                println(s"Perses execution on $benchmark successful")
+                Some(r)
+            catch {
+                case _ =>
+                    println(s"Failed execution on $benchmark")
+                    None
+            }
+        })
+
+        val t = results.foldLeft(Table.empty[String])((table, o) => o.addToTable(table))
+        val w = Writer.openTimeStamped("output/perses-output.csv")
+        Writer.write(w, t.toCSVString())
+        Writer.close(w)
 
 /** The evaluation combines strategies with benchmark programs and writes the results ot a single CSV file */
 object Evaluation:
-    val REPEAT_BENCHMARK_TIMES = 10
+    val REPEAT_BENCHMARK_TIMES = 0
 
     case class EvaluationResult(strategyName: String, benchmarkName: String, result: ReductionData, nth: Int):
         private val rowName: String = strategyName + ":" + benchmarkName + ":" + nth
@@ -723,8 +783,9 @@ object Evaluation:
                 val comparison = new InstrumentationBasedInterpreterComparison
                 val s = strategy(program, comparison)
                 val strategyName = s.getClass.nn.getName.nn
-                println(s"Running on $path with strategy $strategyName")
-                val result = s.eval(program, path)
+                println(s"[$nth][$path] running with strategy $strategyName")
+                val (time, result) = Timer.time(s.eval(program, path))
+                println(s"[$nth][$path] took ${time / (1000 * 1000)} ms")
                 EvaluationResult(strategyName, path, result, nth)
             })
             .toList
@@ -734,6 +795,7 @@ object Evaluation:
     // TODO: extend countingDD to also count steps spent in each function (mimic call stack)
 
     def main(args: Array[String]): Unit =
+        val benchmarks = List("test/R5RS/various/grid.scm")
         val results = benchmarks.toList.cartesian(strategies).flatMap(onBenchmark.tupled)
         val table = results.foldLeft(Table.empty[String])((table, result) => result.addToTable(table))
         val w = Writer.openTimeStamped("output/results.csv")
