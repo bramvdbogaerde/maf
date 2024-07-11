@@ -104,6 +104,8 @@ trait InterpreterComparison extends Instrumenter:
             case (Right(v1), Right(v2))                                         => cmp(v1, v2)
             case (Left(exc1), _: Right[_, _]) if isTimeout(exc1)                => Some(TimeoutDisagreement(name, true))
             case (_: Right[_, _], Left(exc2)) if isTimeout(exc2)                => Some(TimeoutDisagreement(name, false))
+            // TODO(bram): fix: Ignore uninitialized variables for now since these cause spurious errors leading to extremely small programs in Perses (such as (letrec ((_0 _0)) _0)
+            case (Left(ProgramError(maf.core.UninitialisedVariableError(_))), Right(_)) => None
             case (Left(exc), _: Right[_, _]) => Some(CrashDisagreement(name, exc.toString() + "\n" + exc.getStackTrace().nn.mkString("\n")))
             case (_: Right[_, _], Left(exc)) => Some(CrashDisagreement(name, exc.toString() + "\n" + exc.getStackTrace().nn.mkString("\n")))
             case (Left(exc1), Left(exc2))    =>
@@ -190,6 +192,7 @@ class PrintBasedInterpreterComparison extends InterpreterComparison:
           runInternalInterpreter(program),
           runExternalInterpreter(program),
           (v1: String, v2: String) =>
+              println(s"comparing output $v1 with $v2")
               if processOutput(v1) == processOutput(v2) then None else Some(OutputDisagreement(name, processOutput(v1), processOutput(v2)))
         )
 
@@ -268,21 +271,36 @@ class CallbackBasedInterpreterComparison extends ReturnValueInterpreterCompariso
         )
 
 object ProgramLoader:
-    def loadProgram(path: String, instrumenter: Instrumenter): SchemeExp =
+    def loadProgram(path: String, instrumenter: Instrumenter, doInstrument: Boolean = true, doUndefine: Boolean = true): SchemeExp =
         val content = Reader.loadFile(path)
         val parsed = SchemeParser.parse(content)
-        val instrumented = parsed.map(instrumenter.instrument)
+        val instrumented = if doInstrument then parsed.map(instrumenter.instrument) else parsed
         val preluded = SchemePrelude.addPrelude(instrumented, incl = Set("__log"))
-        SchemeParser.undefine(preluded)
+        val undefined = SchemeParser.undefine(preluded)
+        undefined
+
+case class ExecutionStats(numberOfSteps: Long):
+    def asEnvironmentString: String =
+        s"""|NUMBER_OF_STEPS=$numberOfSteps
+    """.stripMargin
 
 /** This applies differential testing to two interpreters. Used to find programs which have different interpretation between the two interpreters */
-class DifferentialTesting(comparison: InterpreterComparison, reporter: DifferentialTestingReporter, benchmarks: Set[String]):
+class DifferentialTesting(
+    comparison: PrintBasedInterpreterComparison,
+    reporter: DifferentialTestingReporter,
+    benchmarks: Set[String],
+    doInstrument: Boolean = true,
+    doUndefine: Boolean = true):
+    def bounds: ExecutionStats =
+        ExecutionStats(comparison.interpreter2.getEvalSteps())
+
     def onBenchmark(name: String): Unit =
         //println(s"Running on $name")
-        val program = ProgramLoader.loadProgram(name, comparison)
+        val program = ProgramLoader.loadProgram(name, comparison, true, doUndefine)
+        println(s"DifferentialTesting onBenchmark: $program")
         comparison.differenceOn(name, program) match {
             case Some(disagreement) =>
-                //println(s"Disagreement on $name: $disagreement")
+                println(s"Disagreement on $name: $disagreement")
                 reporter.addDisagreement(disagreement)
             case _ => ()
         }
@@ -342,10 +360,10 @@ abstract class DeltaDebug(comparison: InterpreterComparison):
             case Some(disagreement) =>
                 Writer.dump("/tmp/disagreement.scm", program.toString)
                 disagreement.dump("/tmp/out/")
-                //println(s"Disagreement on: ${program.toString().take(100)}: ${disagreement.toString().take(150)}")
+                println(s"Disagreement on: ${program.toString().take(100)}: ${disagreement.toString().take(150)}")
                 true
             case None =>
-                // println(s"Agreement on: ${program.toString().take(20)}...")
+                println(s"Agreement on: ${program.toString().take(20)}...")
                 false
 
     def reduce(program: SchemeExp): SchemeExp =
@@ -605,17 +623,24 @@ class RemoveExpensiveFunctionsEval(tree: SchemeExp, comparison: PrintBasedInterp
  * script. As such we assume that the filename is always `program.rkt` in the current directory.
  */
 object PersesProperty:
+    def runProperty(filename: String, instrument: Boolean = true, undefine: Boolean = true): Boolean =
+        val benchmarks = Set(filename)
+
+        val reporter = new ConsoleDifferentialTestingReporter()
+        val tester = new DifferentialTesting(new InstrumentationBasedInterpreterComparison(), reporter, benchmarks, instrument, undefine)
+        tester.main(Array())
+        // Output bounds
+        System.err.nn.println(tester.bounds.asEnvironmentString)
+
+        // output the results of differential testing
+        reporter.hasDisagreement
+
     def main(args: Array[String]): Unit =
         if !File("program.rkt").exists() then
             println("No file named 'program.rkt' found in the current directory")
             sys.exit(1)
 
-        val benchmarks = Set("program.rkt")
-
-        val reporter = new ConsoleDifferentialTestingReporter()
-        val tester = new DifferentialTesting(new InstrumentationBasedInterpreterComparison(), reporter, benchmarks)
-        tester.main(Array())
-        if reporter.hasDisagreement then sys.exit(0)
+        if runProperty("program.rkt", instrument = false, undefine = false) then sys.exit(0)
         else sys.exit(1)
 
 /** Entrypoint for executing the Perses program reducer, parses its output for statistics that we use during the evaluation */
@@ -634,8 +659,14 @@ object Perses:
         val parsed = SchemeParser.parse(content)
         SchemeParser.undefine(parsed)
 
-    def testFile(filename: String, nth: Int): Evaluation.EvaluationResult =
+    def testFile(filename: String, nth: Int): Option[Evaluation.EvaluationResult] =
         import scala.sys.process._
+        val persesInput =
+            // first test whether there is a disagreement on the file
+            // to begin with
+            if !PersesProperty.runProperty(filename) then
+                println(s"No disagreement for $filename found, skipping...")
+                return None
 
         // output path for perses
         val outputPath = "out/output-perses-" + Clock.nowStr()
@@ -676,8 +707,7 @@ object Perses:
           "1",
           "--maf-dump-file",
           File(outputPath + "/stats.csv").getAbsolutePath().nn,
-          //"--alg",
-          //"ddmin"
+          "--whitebox"
         )
         println(cmd)
 
@@ -690,34 +720,39 @@ object Perses:
         val outstats: List[String] = Reader.loadFile(outputPath + "/stats.csv").strip.nn.split(";").nn.map(_.nn).toList
         val oracleInvocations = outstats(1).toInt
         val reductionTime = outstats(2).toLong
-        val oracleEvolution = outstats(3).split(":").nn.toList.map(_.nn.toLong)
+        val beforeProgramSize = outstats(3).toInt
+        val afterProgramSize = outstats(4).toInt
+        val oracleEvolution = outstats(5).split(":").nn.toList.map(_.nn.toLong)
 
         val d = ReductionData(
           benchmark = filename,
-          origSize = contents.size,
-          reducedSize = outputProgram.size,
-          reductionPercentage = outputProgram.size / contents.size,
+          origSize = beforeProgramSize,
+          reducedSize = afterProgramSize,
+          reductionPercentage = beforeProgramSize / afterProgramSize,
           reductionTime = reductionTime,
           oracleInvocations = oracleInvocations,
           oracleEvolution = oracleEvolution,
           sizeEvolution = List()
         )
 
-        Evaluation.EvaluationResult("perses", filename, d, nth)
+        Some(Evaluation.EvaluationResult("perses", filename, d, nth))
 
     def main(args: Array[String]): Unit =
-        val results: List[Evaluation.EvaluationResult] = Evaluation.benchmarks.toList.flatMap(benchmark => {
-            try
-                println(s"Running perses on $benchmark")
-                val r = testFile(benchmark, 0)
-                println(s"Perses execution on $benchmark successful")
-                Some(r)
-            catch {
-                case _ =>
-                    println(s"Failed execution on $benchmark")
-                    None
-            }
-        })
+        val results: List[Evaluation.EvaluationResult] = Evaluation.benchmarks
+            //.take(1)
+            .toList
+            .flatMap(benchmark => {
+                try
+                    println(s"Running perses on $benchmark")
+                    val r = testFile(benchmark, 0)
+                    println(s"Perses execution on $benchmark successful")
+                    r
+                catch {
+                    case e =>
+                        println(s"Failed execution on $benchmark with exception $e")
+                        None
+                }
+            })
 
         val t = results.foldLeft(Table.empty[String])((table, o) => o.addToTable(table))
         val w = Writer.openTimeStamped("output/perses-output.csv")
@@ -749,28 +784,28 @@ object Evaluation:
     val benchmarks: Set[String] = Set(
       // These are all the ones that yield differences worth investigating
       // Different order of evaluation of let bindings?
-      "test/R5RS/gabriel/dderiv.scm", // (let ((arg ((lambda unique_args_382 #f) 5 '())) (result ((lambda unique_args_374 '()) 0 '()))) (equal? '() result))
-      "test/R5RS/scp1/cashdesk-counter.scm", // (letrec ((teller ((lambda unique_args_295 #f))) (_0 ((lambda unique_args_287 '()) 'toets)) (_3 teller)) '())
-      "test/R5RS/scp1/twitter.scm", // (letrec ((res1 ((lambda unique_args_463 #f) 'username)) (_0 ((lambda unique_args_455 '()) 'output)) (_6 res1)) '())
-      //
-      // Bug: (eq?) and (eq? x) are valid in guile, but not in MAF. It's guile that deviates from R5RS
+      //"test/R5RS/gabriel/dderiv.scm", // (let ((arg ((lambda unique_args_382 #f) 5 '())) (result ((lambda unique_args_374 '()) 0 '()))) (equal? '() result))
+      //"test/R5RS/scp1/cashdesk-counter.scm", // (letrec ((teller ((lambda unique_args_295 #f))) (_0 ((lambda unique_args_287 '()) 'toets)) (_3 teller)) '())
+      //"test/R5RS/scp1/twitter.scm", // (letrec ((res1 ((lambda unique_args_463 #f) 'username)) (_0 ((lambda unique_args_455 '()) 'output)) (_6 res1)) '())
+      ////
+      //// Bug: (eq?) and (eq? x) are valid in guile, but not in MAF. It's guile that deviates from R5RS
       "test/R5RS/various/values.scm", // (letrec ((string->number eq?) (_1 (string->number))) '())
-      //
-      // Bug: letrec can reference later bindings in the same letrec, does not work in MAF
-      // It's actually guile that violates R5RS, as it states: "One restriction on letrec is very important: it must be possible to evaluate each <init> without assigning or referring to the value of any <variable>. If this restriction is violated, then it is an error. The restriction is necessary because Scheme passes arguments by value rather than by name. In the most common uses of letrec, all the <init>s are lambda expressions and the restriction is satisfied automatically. "
-      /// "test/R5RS/WeiChenRompf2019/rsa.scm", // (letrec ((is-legal-public-exponent? e) (e 7)) '())
-      //
-      // Same bug: guile allows circular bindings, e.g., (letrec ((_0 _0)) _0), where _0 will have an unspecified value.
-      "test/R5RS/scp1/parking-counter.scm",
-      "test/R5RS/scp1/tree-with-branches.scm",
-      "test/R5RS/various/eta.scm",
-      "test/R5RS/various/four-in-a-row.scm",
-      "test/R5RS/various/grid.scm",
+      ////
+      //// Bug: letrec can reference later bindings in the same letrec, does not work in MAF
+      //// It's actually guile that violates R5RS, as it states: "One restriction on letrec is very important: it must be possible to evaluate each <init> without assigning or referring to the value of any <variable>. If this restriction is violated, then it is an error. The restriction is necessary because Scheme passes arguments by value rather than by name. In the most common uses of letrec, all the <init>s are lambda expressions and the restriction is satisfied automatically. "
+      //"test/R5RS/WeiChenRompf2019/rsa.scm", // (letrec ((is-legal-public-exponent? e) (e 7)) '())
+      ////
+      //// Same bug: guile allows circular bindings, e.g., (letrec ((_0 _0)) _0), where _0 will have an unspecified value.
+      //"test/R5RS/scp1/parking-counter.scm",
+      //"test/R5RS/scp1/tree-with-branches.scm",
+      //"test/R5RS/various/eta.scm",
+      //"test/R5RS/various/four-in-a-row.scm",
+      //"test/R5RS/various/grid.scm",
 
-      // The rest are due to either IO input (cat, wc, tail), or fractions (calc-e-and-cos, simpson-integral, third-root)
-      // Note that there are some high variations due to missing fractions in MAF! For example on simpson-integral
+      //// The rest are due to either IO input (cat, wc, tail), or fractions (calc-e-and-cos, simpson-integral, third-root)
+      //// Note that there are some high variations due to missing fractions in MAF! For example on simpson-integral
       //"test/R5RS/scp1/simpson-integral.scm",
-      // "test/R5RS/scp1/third-root.scm",
+      //"test/R5RS/scp1/third-root.scm",
       //
     )
 
