@@ -102,8 +102,10 @@ trait InterpreterComparison extends Instrumenter:
         (first, second) match
             case (Left(exc1), Left(exc2)) if isTimeout(exc1) && isTimeout(exc2) => None
             case (Right(v1), Right(v2))                                         => cmp(v1, v2)
-            case (Left(exc1), _: Right[_, _]) if isTimeout(exc1)                => Some(TimeoutDisagreement(name, true))
-            case (_: Right[_, _], Left(exc2)) if isTimeout(exc2)                => Some(TimeoutDisagreement(name, false))
+            // TODO(bram): we should not always ignore timeout disagreements, but here we do
+            // so we can implement the bounded execution strategy without satisfying the oracle
+            case (Left(exc1), _: Right[_, _]) if isTimeout(exc1) => None // Some(TimeoutDisagreement(name, true))
+            case (_: Right[_, _], Left(exc2)) if isTimeout(exc2) => None // Some(TimeoutDisagreement(name, false))
             // TODO(bram): fix: Ignore uninitialized variables for now since these cause spurious errors leading to extremely small programs in Perses (such as (letrec ((_0 _0)) _0)
             case (Left(ProgramError(maf.core.UninitialisedVariableError(_))), Right(_)) => None
             case (Left(exc), _: Right[_, _]) => Some(CrashDisagreement(name, exc.toString() + "\n" + exc.getStackTrace().nn.mkString("\n")))
@@ -298,6 +300,12 @@ class DifferentialTesting(
         //println(s"Running on $name")
         val program = ProgramLoader.loadProgram(name, comparison, true, doUndefine)
         println(s"DifferentialTesting onBenchmark: $program")
+        // setup max number of steps based on feedback of previously selected program
+        println(sys.env)
+        if sys.env.contains("NUMBER_OF_STEPS") then
+            println("Integrated feedback")
+            comparison.interpreter2.maxEvalSteps = sys.env.get("NUMBER_OF_STEPS").get.toLong
+
         comparison.differenceOn(name, program) match {
             case Some(disagreement) =>
                 println(s"Disagreement on $name: $disagreement")
@@ -728,7 +736,7 @@ object Perses:
           benchmark = filename,
           origSize = beforeProgramSize,
           reducedSize = afterProgramSize,
-          reductionPercentage = beforeProgramSize / afterProgramSize,
+          reductionPercentage = beforeProgramSize.toDouble / afterProgramSize.toDouble,
           reductionTime = reductionTime,
           oracleInvocations = oracleInvocations,
           oracleEvolution = oracleEvolution,
@@ -750,6 +758,7 @@ object Perses:
                 catch {
                     case e =>
                         println(s"Failed execution on $benchmark with exception $e")
+                        e.printStackTrace()
                         None
                 }
             })
