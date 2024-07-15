@@ -171,7 +171,7 @@ class PrintBasedInterpreterComparison extends InterpreterComparison:
             .nn
             .replaceAll("#<procedure \\w+ at .*>", "#<procedure>")
             .nn // from guile, e.g., #<procedure 5602d43a32e8 at <unknown port>:2:0 (x)>
-            .replaceAll("#<procedure ([^ ]+) .*?\\)>", "#<procedure>")
+            .replaceAll("#<procedure ([^ ]+) .*\\)>", "#<procedure>")
             .nn // from guile, e.g., #<procedure foo (x)>
             .replaceAll("#<procedure:λ@[0-9:]+ \\(\\)>", "#<procedure>")
             .nn // from MAF, e.g., #<procedure:λ@639:6 ()>
@@ -793,8 +793,8 @@ object Evaluation:
     val benchmarks: Set[String] = Set(
       // These are all the ones that yield differences worth investigating
       // Different order of evaluation of let bindings?
-      //"test/R5RS/gabriel/dderiv.scm", // (let ((arg ((lambda unique_args_382 #f) 5 '())) (result ((lambda unique_args_374 '()) 0 '()))) (equal? '() result))
-      "test/R5RS/scp1/cashdesk-counter.scm", // (letrec ((teller ((lambda unique_args_295 #f))) (_0 ((lambda unique_args_287 '()) 'toets)) (_3 teller)) '())
+      "test/R5RS/gabriel/dderiv.scm", // (let ((arg ((lambda unique_args_382 #f) 5 '())) (result ((lambda unique_args_374 '()) 0 '()))) (equal? '() result))
+      //"test/R5RS/scp1/cashdesk-counter.scm", // (letrec ((teller ((lambda unique_args_295 #f))) (_0 ((lambda unique_args_287 '()) 'toets)) (_3 teller)) '())
       //"test/R5RS/scp1/twitter.scm", // (letrec ((res1 ((lambda unique_args_463 #f) 'username)) (_0 ((lambda unique_args_455 '()) 'output)) (_6 res1)) '())
       ////
       //// Bug: (eq?) and (eq? x) are valid in guile, but not in MAF. It's guile that deviates from R5RS
