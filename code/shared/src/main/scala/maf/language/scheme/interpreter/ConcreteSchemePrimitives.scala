@@ -924,8 +924,7 @@ trait ConcreteSchemePrimitives:
             def fun = { case Value.Pointer(addr) =>
                 val str = getString(addr)
                 if str.toIntOption.nonEmpty then Value.Integer(str.toIntOption.get)
-                // R5RS: "if string is not a valid notation for a number, then string->number returns #f"
-                else Value.Bool(false)
+                else signalException(s"$name: $str can not be converted into a number")
             }
 
         object Substring extends Prim:
