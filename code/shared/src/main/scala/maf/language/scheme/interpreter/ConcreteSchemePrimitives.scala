@@ -946,12 +946,8 @@ trait ConcreteSchemePrimitives:
             val name = "eq?"
 
             def call(args: List[Value], position: Position): Value.Bool = args match
-                // PATCH[dd]: same behavior as Guile Scheme where `eq?` can be called with
-                // any number of arguments.
-                case Nil => Value.Bool(true)
-                case first :: rest =>
-                    Value.Bool(rest.find(first != _).isEmpty)
-                case _ => signalException(s"$name ($position): wrong number of arguments ${args.length}")
+                case x :: y :: Nil => Value.Bool(x == y)
+                case _             => signalException(s"$name ($position): wrong number of arguments ${args.length}")
 
         /////////////
         // Vectors //
