@@ -593,7 +593,7 @@ case class SchemeLetrec(
     override def toString: String =
         val bi = bindings.map({ case (name, exp) => s"($name $exp)" }).mkString(" ")
         val bo = body.mkString(" ")
-        s"(letrec* ($bi) $bo)"
+        s"(letrec ($bi) $bo)"
     def fv: Set[String] =
         (bindings.map(_._2).flatMap(_.fv).toSet ++ SchemeBody.fv(body)) -- bindings
             .map(_._1.name)
