@@ -1,10 +1,9 @@
-; lifo != fifo (incremental) 
-(letrec ((for (lambda (f)
-                (<change>
-                  (f 1)
-                  ())))
-          (make-matrix (lambda (init)
-                         (for (lambda (j) (init () ())))))
-          (make-maze (make-matrix (lambda (i j) (<change> #t #f)))))
-  ())
-
+; "test/changes/scheme/generated/R5RS_scp1_dedouble-2.scm"
+(letrec ((iter (lambda (bool)
+                 (if bool
+                   (<change>
+                     (lambda arg
+                       ())
+                     ())
+                   (iter ())))))
+  (iter #f))
