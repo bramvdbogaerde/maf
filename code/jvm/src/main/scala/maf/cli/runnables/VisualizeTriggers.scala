@@ -10,7 +10,7 @@ import maf.modular.Dependency
 import maf.modular.AddrDependency
 import maf.util.Writer
 import maf.modular.scheme.PrmAddr
-import maf.util.graph.Tarjan
+import maf.util.graph.SCC
 import maf.modular.DependencyTrackingSnapshot
 
 /**

@@ -25,7 +25,7 @@ import maf.modular.worklist.{
 }
 import maf.util.Reader
 import maf.util.benchmarks.{Statistics, Timeout, Timer}
-import maf.util.graph.{Tarjan, TopSort}
+import maf.util.graph.{SCC, TopSort}
 import maf.util.Wrapper.instance
 import maf.util.Wrapper2.instance
 
@@ -71,7 +71,7 @@ object DynamicWorklistAlgorithms:
             // applying Tarjan.collapse to (ideally) get a DAG (Directed Acyclic Graph)
             // Care must be taken in case the graph consists of only 1 strongly connected component,
             // because in that case you actually get back a graph with only 1 node.
-            val (sccs, sccEdges) = Tarjan.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
+            val (sccs, sccEdges) = SCC.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
 
             println(s"LENGTH: ${sccs.toList.length}")
 
@@ -146,7 +146,7 @@ object DynamicWorklistAlgorithms:
                 // applying Tarjan.collapse to (ideally) get a DAG (Directed Acyclic Graph)
                 // Care must be taken in case the graph consists of only 1 strongly connected component,
                 // because in that case you actually get back a graph with only 1 node.
-                val (sccs, sccEdges) = Tarjan.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
+                val (sccs, sccEdges) = SCC.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
 
                 if sccs.toList.length == 1 then
                     // code to only work with call dependencies
@@ -219,7 +219,7 @@ object DynamicWorklistAlgorithms:
                     // applying Tarjan.collapse to (ideally) get a DAG (Directed Acyclic Graph)
                     // Care must be taken in case the graph consists of only 1 strongly connected component,
                     // because in that case you actually get back a graph with only 1 node.
-                    val (sccs, sccEdges) = Tarjan.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
+                    val (sccs, sccEdges) = SCC.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
 
                     /// Now we are going to construct a new graph that has as
                     /// nodes the strongly connected components of the original graph
@@ -279,7 +279,7 @@ object DynamicWorklistAlgorithms:
                     // applying Tarjan.collapse to (ideally) get a DAG (Directed Acyclic Graph)
                     // Care must be taken in case the graph consists of only 1 strongly connected component,
                     // because in that case you actually get back a graph with only 1 node.
-                    val (sccs, sccEdges) = Tarjan.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
+                    val (sccs, sccEdges) = SCC.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
 
                     // applying topological sorting
                     val sortedNodes = TopSort.topsort(sccs.toList, sccEdges)
@@ -323,7 +323,7 @@ object DynamicWorklistAlgorithms:
                     // applying Tarjan.collapse to (ideally) get a DAG (Directed Acyclic Graph)
                     // Care must be taken in case the graph consists of only 1 strongly connected component,
                     // because in that case you actually get back a graph with only 1 node.
-                    val (sccs, sccEdges) = Tarjan.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
+                    val (sccs, sccEdges) = SCC.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
 
                     // applying topological sorting
                     val sortedNodes = TopSort.topsort(sccs.toList, sccEdges)
@@ -365,7 +365,7 @@ object DynamicWorklistAlgorithms:
                 // applying Tarjan.collapse to (ideally) get a DAG (Directed Acyclic Graph)
                 // Care must be taken in case the graph consists of only 1 strongly connected component,
                 // because in that case you actually get back a graph with only 1 node.
-                val (sccs, sccEdges) = Tarjan.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
+                val (sccs, sccEdges) = SCC.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
 
                 // applying topological sorting
                 val sortedNodes = TopSort.topsort(sccs.toList, sccEdges)
@@ -413,7 +413,7 @@ object DynamicWorklistAlgorithms:
             // applying Tarjan.collapse to (ideally) get a DAG (Directed Acyclic Graph)
             // Care must be taken in case the graph consists of only 1 strongly connected component,
             // because in that case you actually get back a graph with only 1 node.
-            val (sccs, sccEdges) = Tarjan.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
+            val (sccs, sccEdges) = SCC.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
 
             if sccs.toList.length == 1 then
                 // code to only work with call dependencies
@@ -498,7 +498,7 @@ object DynamicWorklistAlgorithms:
             // applying Tarjan.collapse to (ideally) get a DAG (Directed Acyclic Graph)
             // Care must be taken in case the graph consists of only 1 strongly connected component,
             // because in that case you actually get back a graph with only 1 node.
-            val (sccs, sccEdges) = Tarjan.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
+            val (sccs, sccEdges) = SCC.collapse(graph.keys.toSet, graph.map { case (k, v) => (k, v.toSet) }.toMap)
 
             // applying topological sorting
             val sortedNodes = TopSort.topsort(sccs.toList, sccEdges)
